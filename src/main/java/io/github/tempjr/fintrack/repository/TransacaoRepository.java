@@ -5,14 +5,32 @@ import io.github.tempjr.fintrack.model.enums.OrigemCategoria;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
+import java.util.Optional;
 import java.util.Set;
 
-public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
+public interface TransacaoRepository extends JpaRepository<Transacao, Long>, JpaSpecificationExecutor<Transacao> {
+
+    /**
+     * Listagem com filtros (RF12). O @EntityGraph traz conta e categoria no mesmo SELECT (JOIN), evitando
+     * uma consulta extra por linha (N+1). As tags (coleção) não entram aqui: JOIN com coleção quebra a
+     * paginação no banco. Elas vêm em lote pelo hibernate.default_batch_fetch_size.
+     */
+    @Override
+    @EntityGraph(attributePaths = {"conta", "categoria"})
+    Page<Transacao> findAll(Specification<Transacao> spec, Pageable pageable);
+
+    /** Uma transação com tudo carregado, para detalhe e edição. */
+    @EntityGraph(attributePaths = {"conta", "categoria", "tags"})
+    Optional<Transacao> findDetalhadaById(Long id);
+
 
     /**
      * Das chaves informadas, devolve as que já existem na conta. Uma consulta só para o arquivo inteiro,

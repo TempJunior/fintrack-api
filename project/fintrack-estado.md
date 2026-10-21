@@ -14,18 +14,16 @@ Legenda: ⬜ não iniciado · 🟨 em andamento · ✅ pronto · ⏸ adiado · �
 ---
 
 ## 1. Etapa atual
-**Etapa 5 — Categorização** (✅ 2026-10-20, branch `feat/etapa-5-categorizacao`, aguardando commit).
-- Categorias em 2 níveis (`/api/v1/categorias`: criar, listar em árvore, buscar, renomear); nome repetido no mesmo nível = 409.
-- Regras (`/api/v1/regras`: criar, listar em ordem de avaliação, excluir). CONTAINS/STARTS_WITH ignoram maiúsculas e acentos; REGEX validada na criação.
-- `CategorizadorPorRegras` (Java puro): menor prioridade vence; empate → regra mais antiga.
-- Importação já categoriza as transações antes de gravar (RF17).
-- `POST /api/v1/regras/reaplicar` (RF19): lote em fatias de 500; nunca toca nas `MANUAL`; categorizada por regra que não casa mais volta a "Não categorizado".
-- 123 testes passando.
+**Etapa 6 — Transações (API)** (✅ 2026-10-20, branch `feat/etapa-6-transacoes-api`, aguardando commit).
+- `GET /api/v1/transacoes`: paginado (padrão 20, máx. 100), mais recentes primeiro, filtros combináveis `contaId`, `categoriaId` (inclui subcategorias), `semCategoria`, `tipo`, `dataInicio`, `dataFim`, `texto` (RF12, RNF03). Resposta em `PaginaResponse` (formato próprio, estável para o Paging 3 do app).
+- `GET /{id}`, `PUT/DELETE /{id}/categoria` (manual — RF18), `PATCH /{id}` para nota, tags e transferência interna (RF13, RF14). Dado bruto não tem como ser alterado (RNF06, testado).
+- Filtros com `Specification`; sem N+1: `@EntityGraph` (conta, categoria) + `default_batch_fetch_size` (tags). Teste conta as consultas: ≤ 3 para uma página de 20.
+- 140 testes passando.
 
-Etapas 1 a 4 concluídas (Etapa 1 sem o 1.3, adiado por falta de Docker).
+Etapas 1 a 5 concluídas (Etapa 1 sem o 1.3, adiado por falta de Docker).
 
 ## 2. Próximo passo
-**Etapa 6 — Transações (API):** listagem paginada com filtros combináveis (período, conta, categoria, tipo, texto — RF12, RNF03), detalhe, enriquecimento (categoria manual, nota, tags — RF13, RF18) e transferência interna (RF14).
+**Etapa 7 — Relatórios:** receitas × despesas por período (RF21), gasto por categoria (RF22), evolução mensal (RF23), comparativo entre meses (RF24), saldos (RF25, D-10) e filtros por conta/categoria/período (RF26). Transferências internas fora das somas (RF14).
 
 Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil apontando para ele e Testcontainers nos testes de integração.
 
@@ -64,14 +62,14 @@ Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil a
 | `FintrackApplication` | Main do Spring Boot |
 | `model` | Entidades JPA: `Conta`, `Transacao`, `Categoria` (2 níveis, renomear), `RegraCategorizacao` (`corresponde`), `Importacao`; `DedupKey`, `CategorizadorPorRegras` (Java puro) |
 | `model.enums` | `Instituicao` (com código do banco), `TipoConta`, `TipoTransacao`, `OrigemCategoria`, `Operador`, `StatementFormat`, `ResultadoImportacao` |
-| `service` | `ContaService`/`Impl` (criar, listar, buscar, renomear, inativar), `TransacaoService`/`Impl` (`salvarNovas` com dedup, `reaplicarRegras`) + `ResultadoDedup`, `ResultadoReaplicacao`, `CategorizacaoService`/`Impl` (categorias, regras, `aplicarRegras`), `ImportService`/`Impl` (Fluxo B completo com `TransactionTemplate`) |
+| `service` | `ContaService`/`Impl` (criar, listar, buscar, renomear, inativar), `TransacaoService`/`Impl` (`salvarNovas` com dedup, `reaplicarRegras`, `listar` com filtros, `buscar`, categoria manual, `enriquecer`) + `ResultadoDedup`, `ResultadoReaplicacao`, `CategorizacaoService`/`Impl` (categorias, regras, `aplicarRegras`), `ImportService`/`Impl` (Fluxo B completo com `TransactionTemplate`) |
 | `parser` | `FormatDetector`, `StatementParser`, `OfxStatementParser`, `StatementParserResolver`, `OfxCharset`, `OfxDataLiteralConversion`, `ImportContext`, `ParsedStatement`, `AccountRef`, `RawTransaction` |
-| `repository` | `ContaRepository`, `TransacaoRepository` (`findDedupKeysExistentes`, `findByContaId`, `findCategorizaveis` em Slice), `ImportacaoRepository`, `CategoriaRepository` (`existeNomeNoNivel`), `RegraCategorizacaoRepository` (`findAllComCategoria` com JOIN FETCH) |
-| `controller` | `ContaController`, `ImportController`, `CategoriaController` (`/api/v1/categorias`), `RegraController` (`/api/v1/regras`) |
-| `dto` | Requests: `CriarContaRequest`, `AtualizarContaRequest`, `CriarCategoriaRequest`, `RenomearCategoriaRequest`, `CriarRegraRequest`. Responses: `ContaResponse`, `ImportacaoResponse` (dinheiro como string), `CategoriaResponse` (árvore), `RegraResponse` |
+| `repository` | `ContaRepository`, `TransacaoRepository` (`findDedupKeysExistentes`, `findByContaId`, `findCategorizaveis` em Slice, `findAll(Specification)` com `@EntityGraph`, `findDetalhadaById`) + `TransacaoFiltro` e `TransacaoSpecs`, `ImportacaoRepository`, `CategoriaRepository` (`existeNomeNoNivel`), `RegraCategorizacaoRepository` (`findAllComCategoria` com JOIN FETCH) |
+| `controller` | `ContaController`, `ImportController`, `CategoriaController` (`/api/v1/categorias`), `RegraController` (`/api/v1/regras`), `TransacaoController` (`/api/v1/transacoes`) |
+| `dto` | Requests: `CriarContaRequest`, `AtualizarContaRequest`, `CriarCategoriaRequest`, `RenomearCategoriaRequest`, `CriarRegraRequest`. Responses: `ContaResponse`, `ImportacaoResponse` (dinheiro como string), `CategoriaResponse` (árvore), `RegraResponse`, `TransacaoResponse`, `PaginaResponse<T>`. Requests da Etapa 6: `CategorizarTransacaoRequest`, `EnriquecerTransacaoRequest` |
 | `config` | `OpenApiConfig` |
 | `exception` | `RecursoNaoEncontradoException`, `ImportacaoRejeitadaException`, `ArquivoInvalidoException`, `ConflitoException`, `GlobalExceptionHandler` (ProblemDetail: 400, 404, 409, 413, 422, 500) |
-| `src/test` | Unitários sem Spring: `ContaTest`, `TransacaoTest`, `DedupKeyTest`, `RegraCategorizacaoTest`, `ContaServiceImplTest`, `TransacaoServiceImplTest`, `CategorizacaoServiceImplTest`. Parser: `OfxStatementParserTest`, `FormatDetectorTest`, `OfxCharsetTest`. Web: `ContaControllerTest`, `ImportControllerTest` (`@WebMvcTest`). Integração: `TransacaoRepositoryTest`, `TransacaoServiceIntegrationTest` (`@DataJpaTest` + Flyway), `ImportServiceIntegrationTest` e `CategorizacaoApiIntegrationTest` (`@SpringBootTest`, sem transação de teste, limpam o banco antes e depois), `OpenApiContractTest`. `FintrackApplicationTests` |
+| `src/test` | Unitários sem Spring: `ContaTest`, `TransacaoTest`, `DedupKeyTest`, `RegraCategorizacaoTest`, `ContaServiceImplTest`, `TransacaoServiceImplTest`, `CategorizacaoServiceImplTest`. Parser: `OfxStatementParserTest`, `FormatDetectorTest`, `OfxCharsetTest`. Web: `ContaControllerTest`, `ImportControllerTest` (`@WebMvcTest`). Integração: `TransacaoRepositoryTest`, `TransacaoServiceIntegrationTest` (`@DataJpaTest` + Flyway), `ImportServiceIntegrationTest`, `CategorizacaoApiIntegrationTest` e `TransacaoApiIntegrationTest` (`@SpringBootTest`, sem transação de teste, limpam o banco antes e depois; o último conta consultas SQL via estatísticas do Hibernate), `OpenApiContractTest`. `FintrackApplicationTests` |
 | `resources/db/migration` | `V1__schema_inicial.sql` (6 tabelas, constraints e índices do modelo) |
 | `test/resources/ofx` | OFX **sintéticos**: Itaú v1 em Windows-1252 (com `–` para pegar erro de encoding), cartão v2 UTF-8 com FITID UUID e datas sem fuso, corrompido, PDF e CSV. `*.ofx` marcado como `binary` no `.gitattributes` |
 | `arquivos/itau.ofx` | Extrato real Itaú (16 transações, jun–jul/2026) — fora do git |
@@ -87,10 +85,10 @@ Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil a
 | Segurança (filtro de token) | ⬜ | |
 | Contas | ✅ | Entidade, service e API completos (RF01–RF03). `numeroExterno` só será preenchido pela importação (Etapa 4) |
 | Importação (detector, parser OFX, ImportService) | ✅ | Conta e cartão, v1 e v2; upload; validação da conta; atomicidade; auditoria; categorização automática |
-| Transações (dedup, enriquecimento) | 🟨 | Núcleo ✅: entidade com bruto imutável, `dedupKey`, `TransacaoService.salvarNovas` idempotente. Falta API de listagem/enriquecimento (Etapa 6) |
+| Transações (dedup, enriquecimento) | ✅ | Núcleo + API: listagem paginada com filtros, detalhe, categoria manual, nota, tags, transferência interna |
 | Categorização (categorias, regras) | ✅ | Categorias (2 níveis), regras, aplicação na importação, reaplicação em lote (RF15–RF20) |
 | Relatórios | ⬜ | |
-| OpenAPI / Swagger | 🟨 | springdoc configurado; cobre contas, importações, categorias e regras. Cresce a cada endpoint novo |
+| OpenAPI / Swagger | 🟨 | springdoc configurado; cobre contas, importações, categorias, regras e transações. Falta relatórios |
 
 ### Infraestrutura
 | Item | Status | Observações |
@@ -127,6 +125,13 @@ Decisões pequenas que ainda não viraram ADR. Se uma delas crescer, promova par
 - 2026-07 — `Conta.id` = BANKID do OFX (ex.: Itaú 0341) — vincular o arquivo à conta sem seleção manual. **Revisar** (ver §7).
 - 2026-07 — `Transacao.id` = FITID do OFX, usado também para deduplicação. **Revisar** (ver §7).
 - 2026-10-20 — Backend em camadas MVC (controller/service/repository), sem módulos internos e com entidade JPA única — **ADR-009**. Resolve o D-06; `Money` sai do plano.
+- 2026-10-20 — Transações (Etapa 6):
+  - Categoria manual em endpoint próprio (`PUT/DELETE /{id}/categoria`): no PATCH não daria para distinguir "não mexer" de "remover" (os dois chegam nulos).
+  - PATCH: campo ausente não muda; `tags` substitui a lista inteira; `nota` vazia apaga. Campos do dado bruto enviados pelo cliente são ignorados (o DTO não os tem).
+  - Filtro por categoria inclui as subcategorias. Busca por texto ignora maiúsculas, mas **não** acentos (exigiria `unaccent` no Postgres) — possível melhoria.
+  - Ordem fixa: data desc, id desc. Tamanho de página: padrão 20, máximo 100.
+  - Resposta paginada em `PaginaResponse` própria, em vez de serializar o `Page` do Spring Data (JSON instável).
+  - N+1: `@EntityGraph` para conta e categoria (ToOne, seguro com paginação); tags por `hibernate.default_batch_fetch_size: 50` (JOIN com coleção quebraria a paginação no banco).
 - 2026-10-20 — Categorização (Etapa 5):
   - CONTAINS e STARTS_WITH ignoram maiúsculas e acentos (bancos escrevem em caixa alta e às vezes sem acento); REGEX ignora maiúsculas e é validada na criação (400 se inválida).
   - Ordem de avaliação: menor prioridade primeiro; empate → regra criada antes. A primeira que casa vence.
@@ -181,7 +186,7 @@ Cada etapa termina em algo que roda e tem teste. A ordem segue as dependências 
 | 3 | Transações (núcleo) | `Transacao` imutável no bruto; cálculo da `dedupKey`; `TransacaoService` com dedup e constraint única | RF07, RF11, RNF04, RNF06, ADR-005 | ✅ |
 | 4 | Importação | ✅ `FormatDetector`, `OfxStatementParser` (Strategy), resolver, upload multipart, validação (checksum + conta), atomicidade, auditoria (inclusive falha) | RF04–RF09, RNF05, RNF12, ADR-002, ADR-004 | ✅ |
 | 5 | Categorização | ✅ Categorias/subcategorias, regras, `CategorizacaoService`, aplicação na importação, reaplicar em lote | RF15–RF20 | ✅ |
-| 6 | Transações (API) | Listagem paginada com filtros, enriquecimento, transferência interna | RF12–RF14, RF18, RNF03 | ⬜ |
+| 6 | Transações (API) | ✅ Listagem paginada com filtros, enriquecimento, transferência interna | RF12–RF14, RF18, RNF03 | ✅ |
 | 7 | Relatórios | Receitas × despesas, por categoria, evolução mensal, comparativo, saldos | RF21–RF26 | ⬜ |
 | 8 | Segurança | Filtro de token, health check liberado, Swagger fechado em prod | RNF11, ADR-008 | ⬜ |
 | 9 | Infra / deploy | Dockerfile da API, compose completo com Caddy, EC2 + Elastic IP + security group, domínio (D-07), backup para S3 | RNF07, RNF10, RNF19–RNF21, ADR-007 | ⬜ |

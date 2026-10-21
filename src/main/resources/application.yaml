@@ -13,6 +13,11 @@ spring:
       ddl-auto: validate
     # Sem Open Session in View: acesso LAZY fora do service falha na hora, em vez de gerar consultas escondidas.
     open-in-view: false
+    properties:
+      hibernate:
+        # Coleções LAZY (ex.: tags de várias transações) carregadas em lotes de até 50 com um IN (...),
+        # em vez de uma consulta por transação (N+1).
+        default_batch_fetch_size: 50
 
   flyway:
     enabled: true

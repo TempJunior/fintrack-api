@@ -23,7 +23,7 @@ class OpenApiContractTest {
     private MockMvc mockMvc;
 
     @Test
-    @DisplayName("/v3/api-docs expõe os endpoints de contas, importações, categorias e regras")
+    @DisplayName("/v3/api-docs expõe todos os endpoints do MVP até aqui")
     void especificacaoTemContas() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
@@ -39,6 +39,11 @@ class OpenApiContractTest {
                 .andExpect(jsonPath("$.paths['/api/v1/categorias/{id}'].patch").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/regras'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/regras/{id}'].delete").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/regras/reaplicar'].post").exists());
+                .andExpect(jsonPath("$.paths['/api/v1/regras/reaplicar'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/transacoes'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/transacoes/{id}'].patch").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/transacoes/{id}/categoria'].put").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/transacoes/{id}/categoria'].delete").exists())
+                .andExpect(jsonPath("$.components.schemas.TransacaoResponse.properties.valor.type").value("string"));
     }
 }

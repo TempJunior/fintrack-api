@@ -19,6 +19,7 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Locale;
@@ -35,6 +36,8 @@ import java.util.Set;
 @Entity
 @Table(name = "transacoes")
 public class Transacao {
+
+    static final int TAMANHO_MAXIMO_TAG = 40;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -79,7 +82,7 @@ public class Transacao {
 
     @ElementCollection
     @CollectionTable(name = "transacao_tags", joinColumns = @JoinColumn(name = "transacao_id"))
-    @Column(name = "tag", nullable = false, length = 40)
+    @Column(name = "tag", nullable = false, length = TAMANHO_MAXIMO_TAG)
     private Set<String> tags = new HashSet<>();
 
     protected Transacao() {
@@ -152,16 +155,34 @@ public class Transacao {
     }
 
     public void adicionarTag(String tag) {
-        if (tag == null || tag.isBlank()) {
-            throw new IllegalArgumentException("tag não pode ser vazia");
-        }
-        tags.add(tag.strip().toLowerCase(Locale.ROOT));
+        tags.add(normalizarTag(tag));
     }
 
     public void removerTag(String tag) {
         if (tag != null) {
             tags.remove(tag.strip().toLowerCase(Locale.ROOT));
         }
+    }
+
+    /** Troca todas as tags de uma vez (PATCH com a lista nova). Valida tudo antes de mexer. */
+    public void substituirTags(Collection<String> novas) {
+        Set<String> normalizadas = new HashSet<>();
+        for (String tag : novas) {
+            normalizadas.add(normalizarTag(tag));
+        }
+        tags.clear();
+        tags.addAll(normalizadas);
+    }
+
+    private static String normalizarTag(String tag) {
+        if (tag == null || tag.isBlank()) {
+            throw new IllegalArgumentException("tag não pode ser vazia");
+        }
+        String normalizada = tag.strip().toLowerCase(Locale.ROOT);
+        if (normalizada.length() > TAMANHO_MAXIMO_TAG) {
+            throw new IllegalArgumentException("tag deve ter no máximo " + TAMANHO_MAXIMO_TAG + " caracteres");
+        }
+        return normalizada;
     }
 
     public Long getId() {

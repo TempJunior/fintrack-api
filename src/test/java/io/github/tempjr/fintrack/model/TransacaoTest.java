@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -141,6 +142,20 @@ class TransacaoTest {
         transacao.adicionarTag("viagem");
 
         assertThat(transacao.getTags()).containsExactly("viagem");
+    }
+
+    @Test
+    @DisplayName("substituirTags troca todas; tag longa é rejeitada sem mexer nas atuais")
+    void substituirTags() {
+        Transacao transacao = novaTransacao("-35.90");
+        transacao.adicionarTag("antiga");
+
+        transacao.substituirTags(List.of("Nova", "outra"));
+        assertThat(transacao.getTags()).containsExactlyInAnyOrder("nova", "outra");
+
+        assertThatThrownBy(() -> transacao.substituirTags(List.of("ok", "x".repeat(41))))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(transacao.getTags()).containsExactlyInAnyOrder("nova", "outra");
     }
 
     @Test

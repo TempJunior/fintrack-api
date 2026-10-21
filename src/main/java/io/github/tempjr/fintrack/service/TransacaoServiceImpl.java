@@ -1,11 +1,15 @@
 package io.github.tempjr.fintrack.service;
 
+import io.github.tempjr.fintrack.exception.RecursoNaoEncontradoException;
 import io.github.tempjr.fintrack.model.CategorizadorPorRegras;
 import io.github.tempjr.fintrack.model.Categoria;
 import io.github.tempjr.fintrack.model.Conta;
 import io.github.tempjr.fintrack.model.Transacao;
 import io.github.tempjr.fintrack.model.enums.OrigemCategoria;
+import io.github.tempjr.fintrack.repository.TransacaoFiltro;
 import io.github.tempjr.fintrack.repository.TransacaoRepository;
+import io.github.tempjr.fintrack.repository.TransacaoSpecs;
+import org.springframework.data.domain.Page;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -87,6 +91,55 @@ public class TransacaoServiceImpl implements TransacaoService {
 
         log.info("Regras reaplicadas: {} avaliadas, {} alteradas", avaliadas, alteradas);
         return new ResultadoReaplicacao(avaliadas, alteradas);
+    }
+
+    @Override
+    public Page<Transacao> listar(TransacaoFiltro filtro, Pageable pageable) {
+        Page<Transacao> pagina = transacaoRepository.findAll(TransacaoSpecs.com(filtro), pageable);
+        // Carrega as tags ainda dentro da transação (open-in-view está desligado). Com o batch fetch,
+        // isso é 1 consulta para a página inteira, não 1 por transação.
+        pagina.forEach(t -> t.getTags().size());
+        return pagina;
+    }
+
+    @Override
+    public Transacao buscar(Long id) {
+        return transacaoRepository.findDetalhadaById(id)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Transação", id));
+    }
+
+    @Override
+    @Transactional
+    public Transacao categorizarManualmente(Long id, Long categoriaId) {
+        Transacao transacao = buscar(id);
+        transacao.categorizarManualmente(categorizacaoService.buscarCategoria(categoriaId));
+        log.info("Transação {} categorizada manualmente na categoria {}", id, categoriaId);
+        return transacao;
+    }
+
+    @Override
+    @Transactional
+    public Transacao removerCategoria(Long id) {
+        Transacao transacao = buscar(id);
+        transacao.removerCategoria();
+        return transacao;
+    }
+
+    @Override
+    @Transactional
+    public Transacao enriquecer(Long id, String nota, List<String> tags, Boolean transferenciaInterna) {
+        Transacao transacao = buscar(id);
+        if (nota != null) {
+            transacao.anotar(nota);
+        }
+        if (tags != null) {
+            transacao.substituirTags(tags);
+        }
+        if (transferenciaInterna != null) {
+            transacao.marcarTransferenciaInterna(transferenciaInterna);
+        }
+        // Os campos brutos (data, valor, descrição) não têm método de alteração: RNF06 garantido pelo modelo.
+        return transacao;
     }
 
     /** @return true se a categoria mudou */

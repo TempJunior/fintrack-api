@@ -2,6 +2,7 @@ package io.github.tempjr.fintrack.exception;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
@@ -92,7 +94,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         Map<String, String> campos = new LinkedHashMap<>();
         ex.getBindingResult().getFieldErrors()
                 .forEach(erro -> campos.putIfAbsent(erro.getField(), erro.getDefaultMessage()));
+        return badRequestComCampos(campos);
+    }
 
+    private static ResponseEntity<Object> badRequestComCampos(Map<String, String> campos) {
         String detail = campos.entrySet().stream()
                 .map(e -> e.getKey() + " " + e.getValue())
                 .reduce((a, b) -> a + "; " + b)
@@ -113,6 +118,29 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         // A mensagem original do Jackson expõe detalhes internos; não repassamos.
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
                 "Corpo da requisição inválido: JSON malformado ou valor não aceito.");
+        problem.setTitle("Requisição inválida");
+        return ResponseEntity.badRequest().body(problem);
+    }
+
+    /** Restrições em parâmetros de consulta (ex.: tamanho=500 com @Max(100)). */
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(HandlerMethodValidationException ex,
+                                                                           HttpHeaders headers,
+                                                                           HttpStatusCode status,
+                                                                           WebRequest request) {
+        Map<String, String> campos = new LinkedHashMap<>();
+        ex.getParameterValidationResults().forEach(resultado -> resultado.getResolvableErrors().forEach(erro ->
+                campos.putIfAbsent(resultado.getMethodParameter().getParameterName(), erro.getDefaultMessage())));
+        return badRequestComCampos(campos);
+    }
+
+    /** Valor que não converte para o tipo do parâmetro (ex.: tipo=XYZ, data malformada). */
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers,
+                                                        HttpStatusCode status, WebRequest request) {
+        String nome = ex.getPropertyName() != null ? ex.getPropertyName() : "parâmetro";
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                "Valor inválido para '" + nome + "'.");
         problem.setTitle("Requisição inválida");
         return ResponseEntity.badRequest().body(problem);
     }
