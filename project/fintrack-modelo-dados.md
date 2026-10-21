@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Projeto | Fintrack |
-| Versão do documento | 0.5 |
+| Versão do documento | 0.6 |
 | Documentos relacionados | `fintrack-srs.md`, `fintrack-arquitetura.md` (ADR-009) |
 | Status | Aprovado — modelo **alvo** do MVP (D-09 a D-12 aprovados em 2026-10-20) |
 | Última atualização | 2026-10-20 |
@@ -194,6 +194,7 @@ classDiagram
     class TransacaoRepository
     class CategoriaRepository
     class RegraCategorizacaoRepository
+    class RelatorioRepository
 
     ContaController --> ContaService
     ImportController --> ImportService
@@ -214,8 +215,10 @@ classDiagram
     ImportService --> CategorizacaoService : aplica regras (RF17)
     TransacaoService --> CategorizacaoService : categorizador para o lote
 
-    RelatorioService --> TransacaoRepository : consultas agregadas
+    RelatorioService --> RelatorioRepository : SUM / GROUP BY
     RelatorioService --> ImportacaoRepository : saldo declarado
+    RelatorioService --> CategorizacaoService : nomes e árvore
+    RelatorioService --> ContaService : contas ativas
 ```
 
 **Regras das camadas**
@@ -226,7 +229,7 @@ classDiagram
 | Service | Regra de negócio, `@Transactional`, usar o próprio repository e outros services | Conhecer HTTP (`HttpServletRequest`, `ResponseEntity`) |
 | Repository | Consultas (Spring Data, `@Query`, paginação) | Regra de negócio |
 
-- **Cada repository tem um "dono"**: o service da mesma entidade. Os outros services passam pelo dono (ex.: `ImportService` chama `TransacaoService`, não `TransacaoRepository`). Exceção: `RelatorioService`, que só lê e precisa de consultas agregadas.
+- **Cada repository tem um "dono"**: o service da mesma entidade. Os outros services passam pelo dono (ex.: `ImportService` chama `TransacaoService`, não `TransacaoRepository`). Exceção: `RelatorioService`, que só lê e precisa de consultas agregadas. As agregações (`SUM`/`GROUP BY` sobre `transacoes`) ficam no `RelatorioRepository`, uma classe com `EntityManager` que monta o JPQL só com os filtros preenchidos.
 - **Sem ciclos entre services.** Se `A` chama `B`, `B` não chama `A`. O diagrama acima não tem ciclo; mantenha assim.
 - **DTOs** em `dto/request` e `dto/response`, como `record` com Bean Validation. Conversão entidade ↔ DTO por método estático no próprio DTO (`ContaResponse.from(conta)`), sem MapStruct (não está nos documentos).
 - **Erros**: exceções de negócio próprias (`RecursoNaoEncontradoException`, `ArquivoInvalidoException`…) convertidas em `ProblemDetail` por um `@RestControllerAdvice`.
@@ -444,3 +447,4 @@ Registradas na §12 da arquitetura; §5.1 atualizada.
 | 0.3 | 2026-10-20 | D-09 a D-12 aprovados. |
 | 0.4 | 2026-10-20 | §4 atualizada com a importação implementada: `OfxCharset`, `OfxDataLiteralConversion`, `AccountRef`, resumo = `Importacao`, auditoria da falha com `TransactionTemplate`. |
 | 0.5 | 2026-10-20 | §3: `RegraController` (reaplicação em lote via `TransacaoService`). |
+| 0.6 | 2026-10-20 | §3: `RelatorioRepository` (agregações) e dependências do `RelatorioService`. |

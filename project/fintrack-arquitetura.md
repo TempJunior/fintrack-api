@@ -197,7 +197,8 @@ io.github.tempjr.fintrack
 │                               CategorizacaoService, RelatorioService
 │                               + implementações, se mantido o padrão interface + Impl)
 ├── repository/                (ContaRepository, TransacaoRepository, CategoriaRepository,
-│                               RegraCategorizacaoRepository, ImportacaoRepository)
+│                               RegraCategorizacaoRepository, ImportacaoRepository,
+│                               RelatorioRepository — agregações com EntityManager)
 ├── model/                     (Conta, Transacao, Categoria, RegraCategorizacao, Importacao,
 │                               DedupKey, CategorizadorPorRegras)
 │   └── enums/                 (Instituicao, TipoConta, TipoTransacao, OrigemCategoria,
@@ -430,7 +431,7 @@ Internet
 | RF11 / RNF06 | Separação bruto imutável vs. enriquecimento (§5.1) |
 | RF14 | Campo `transferenciaInterna` (§5.1) |
 | RF15–RF20 | `CategorizacaoService`, `CategorizadorPorRegras`, `CategoriaController`, `RegraController`; reaplicação em `TransacaoService` |
-| RF21–RF26 | `RelatorioController`/`RelatorioService` |
+| RF21–RF26 | `RelatorioController`/`RelatorioService`; somas no banco via `RelatorioRepository`; saldos pelo `LEDGERBAL` (D-10) |
 | RNF05 / D-01 | Importação atômica (§7.5) |
 | D-02 | ADR-004 |
 | RNF17 | Entidades testáveis como objetos comuns + services com Mockito (§3.5, ADR-009) |

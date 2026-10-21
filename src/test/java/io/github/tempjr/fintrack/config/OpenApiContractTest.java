@@ -44,6 +44,11 @@ class OpenApiContractTest {
                 .andExpect(jsonPath("$.paths['/api/v1/transacoes/{id}'].patch").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/transacoes/{id}/categoria'].put").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/transacoes/{id}/categoria'].delete").exists())
-                .andExpect(jsonPath("$.components.schemas.TransacaoResponse.properties.valor.type").value("string"));
+                .andExpect(jsonPath("$.components.schemas.TransacaoResponse.properties.valor.type").value("string"))
+                .andExpect(jsonPath("$.paths['/api/v1/relatorios/resumo'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/relatorios/por-categoria'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/relatorios/mensal'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/relatorios/comparativo'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/relatorios/saldos'].get").exists());
     }
 }
