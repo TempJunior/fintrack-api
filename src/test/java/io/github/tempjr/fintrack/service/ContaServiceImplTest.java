@@ -12,11 +12,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,27 +33,36 @@ class ContaServiceImplTest {
     private ContaServiceImpl contaService;
 
     @Test
-    @DisplayName("permite duas contas na mesma instituição (corrente e cartão Itaú)")
-    void duasContasMesmaInstituicao() {
-        Conta corrente = new Conta(Instituicao.ITAU, TipoConta.CORRENTE, "Itaú corrente");
-        Conta cartao = new Conta(Instituicao.ITAU, TipoConta.CARTAO, "Itaú cartão");
-        when(contaRepository.save(corrente)).thenReturn(corrente);
-        when(contaRepository.save(cartao)).thenReturn(cartao);
+    @DisplayName("criar monta a conta e salva")
+    void criar() {
+        when(contaRepository.save(any(Conta.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        contaService.criarConta(corrente);
-        contaService.criarConta(cartao);
+        Conta conta = contaService.criar(Instituicao.ITAU, TipoConta.CARTAO, "Itaú cartão");
 
-        verify(contaRepository).save(corrente);
-        verify(contaRepository).save(cartao);
+        assertThat(conta.getInstituicao()).isEqualTo(Instituicao.ITAU);
+        assertThat(conta.getTipo()).isEqualTo(TipoConta.CARTAO);
+        assertThat(conta.isAtiva()).isTrue();
+        verify(contaRepository).save(conta);
     }
 
     @Test
-    @DisplayName("buscarPorId devolve a conta quando existe")
-    void buscarExistente() {
-        Conta conta = new Conta(Instituicao.ITAU, TipoConta.CORRENTE, "Itaú");
-        when(contaRepository.findById(1L)).thenReturn(Optional.of(conta));
+    @DisplayName("criar com apelido vazio falha antes de chegar no banco")
+    void criarApelidoVazio() {
+        assertThatThrownBy(() -> contaService.criar(Instituicao.ITAU, TipoConta.CORRENTE, " "))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(contaRepository);
+    }
 
-        assertThat(contaService.buscarPorId(1L)).isSameAs(conta);
+    @Test
+    @DisplayName("listar sem filtro traz todas; com filtro, só ativas ou inativas")
+    void listar() {
+        List<Conta> todas = List.of(new Conta(Instituicao.ITAU, TipoConta.CORRENTE, "A"));
+        List<Conta> ativas = List.of(new Conta(Instituicao.NUBANK, TipoConta.CORRENTE, "B"));
+        when(contaRepository.findAllByOrderByApelidoAsc()).thenReturn(todas);
+        when(contaRepository.findByAtivaOrderByApelidoAsc(true)).thenReturn(ativas);
+
+        assertThat(contaService.listar(null)).isSameAs(todas);
+        assertThat(contaService.listar(true)).isSameAs(ativas);
     }
 
     @Test
@@ -61,5 +73,36 @@ class ContaServiceImplTest {
         assertThatThrownBy(() -> contaService.buscarPorId(99L))
                 .isInstanceOf(RecursoNaoEncontradoException.class)
                 .hasMessageContaining("99");
+    }
+
+    @Test
+    @DisplayName("renomear altera o apelido da conta existente")
+    void renomear() {
+        Conta conta = new Conta(Instituicao.ITAU, TipoConta.CORRENTE, "Antigo");
+        when(contaRepository.findById(1L)).thenReturn(Optional.of(conta));
+
+        Conta resultado = contaService.renomear(1L, "Novo");
+
+        assertThat(resultado.getApelido()).isEqualTo("Novo");
+    }
+
+    @Test
+    @DisplayName("inativar marca a conta como inativa")
+    void inativar() {
+        Conta conta = new Conta(Instituicao.ITAU, TipoConta.CORRENTE, "Itaú");
+        when(contaRepository.findById(1L)).thenReturn(Optional.of(conta));
+
+        contaService.inativar(1L);
+
+        assertThat(conta.isAtiva()).isFalse();
+    }
+
+    @Test
+    @DisplayName("inativar conta inexistente lança RecursoNaoEncontradoException")
+    void inativarInexistente() {
+        when(contaRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> contaService.inativar(99L))
+                .isInstanceOf(RecursoNaoEncontradoException.class);
     }
 }

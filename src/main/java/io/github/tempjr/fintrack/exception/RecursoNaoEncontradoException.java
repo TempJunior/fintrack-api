@@ -4,6 +4,6 @@ package io.github.tempjr.fintrack.exception;
 public class RecursoNaoEncontradoException extends RuntimeException {
 
     public RecursoNaoEncontradoException(String recurso, Long id) {
-        super(recurso + " não encontrado(a): " + id);
+        super(recurso + " com id " + id + " não existe.");
     }
 }
