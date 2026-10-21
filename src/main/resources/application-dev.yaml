@@ -1,0 +1,16 @@
+# Desenvolvimento local, sem Docker: H2 na memória em modo PostgreSQL.
+# Os dados somem quando a aplicação para. Temporário até o Postgres entrar (estado §6).
+spring:
+  datasource:
+    url: jdbc:h2:mem:fintrack;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+
+  jpa:
+    show-sql: true
+
+  h2:
+    console:
+      # Só em dev. Nunca habilitar em produção.
+      enabled: true
+      path: /h2-console

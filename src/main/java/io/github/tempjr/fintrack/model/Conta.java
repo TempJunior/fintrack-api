@@ -1,36 +1,109 @@
-package io.github.tempjr.fintrack.domain.model;
+package io.github.tempjr.fintrack.model;
 
-import io.github.tempjr.fintrack.domain.enuns.Instituicao;
-import io.github.tempjr.fintrack.domain.enuns.TipoConta;
-import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import io.github.tempjr.fintrack.model.enums.Instituicao;
+import io.github.tempjr.fintrack.model.enums.TipoConta;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
-import java.util.List;
-import java.util.Set;
+import java.util.Objects;
 
+/**
+ * Conta financeira (RF01). Não é excluída, só inativada (RF02).
+ * Não tem lista de transações: a relação é mapeada só do lado de Transacao.
+ */
 @Entity
 @Table(name = "contas")
-@NoArgsConstructor
-@AllArgsConstructor
-@Getter @Setter
 public class Conta {
 
-    @Id
-    private Long id; // Setado pelo ID real do banco: Exemplo itau = BANKID = 0341
+    public static final String MOEDA_PADRAO = "BRL";
 
-    private String apelido;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false, length = 20)
     private Instituicao instituicao;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false, length = 20)
     private TipoConta tipo;
 
-    private boolean ativa;
+    @Column(nullable = false, length = 60)
+    private String apelido;
 
-    @OneToMany(mappedBy = "conta", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<Transacao> transacoes;
+    @Column(nullable = false, length = 3)
+    private String moeda = MOEDA_PADRAO;
+
+    /** ACCTID do OFX (D-09). Preenchido na 1ª importação. Dado sensível: nunca logar (RNF08). */
+    @Column(name = "numero_externo", length = 40)
+    private String numeroExterno;
+
+    @Column(nullable = false)
+    private boolean ativa = true;
+
+    /** Exigido pelo JPA. Não use no código da aplicação. */
+    protected Conta() {
+    }
+
+    public Conta(Instituicao instituicao, TipoConta tipo, String apelido) {
+        this.instituicao = Objects.requireNonNull(instituicao, "instituicao é obrigatória");
+        this.tipo = Objects.requireNonNull(tipo, "tipo é obrigatório");
+        this.apelido = validarApelido(apelido);
+    }
+
+    public void renomear(String novoApelido) {
+        this.apelido = validarApelido(novoApelido);
+    }
+
+    public void inativar() {
+        this.ativa = false;
+    }
+
+    private static String validarApelido(String apelido) {
+        if (apelido == null || apelido.isBlank()) {
+            throw new IllegalArgumentException("apelido é obrigatório");
+        }
+        return apelido.strip();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public Instituicao getInstituicao() {
+        return instituicao;
+    }
+
+    public TipoConta getTipo() {
+        return tipo;
+    }
+
+    public String getApelido() {
+        return apelido;
+    }
+
+    public String getMoeda() {
+        return moeda;
+    }
+
+    public String getNumeroExterno() {
+        return numeroExterno;
+    }
+
+    public boolean isAtiva() {
+        return ativa;
+    }
+
+    /** Sem numeroExterno de propósito (RNF08). */
+    @Override
+    public String toString() {
+        return "Conta{id=" + id + ", instituicao=" + instituicao + ", tipo=" + tipo + ", ativa=" + ativa + "}";
+    }
 }

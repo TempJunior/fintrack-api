@@ -1,0 +1,18 @@
+# Configuração comum a todos os perfis. O que muda por ambiente fica em application-<perfil>.yaml (RNF21).
+spring:
+  application:
+    name: fintrack
+
+  profiles:
+    # Sem SPRING_PROFILES_ACTIVE, sobe em dev. Em produção o perfil será definido por variável de ambiente (Etapa 9).
+    default: dev
+
+  jpa:
+    hibernate:
+      # O schema é criado pelo Flyway (src/main/resources/db/migration). O Hibernate só confere.
+      ddl-auto: validate
+    # Sem Open Session in View: acesso LAZY fora do service falha na hora, em vez de gerar consultas escondidas.
+    open-in-view: false
+
+  flyway:
+    enabled: true

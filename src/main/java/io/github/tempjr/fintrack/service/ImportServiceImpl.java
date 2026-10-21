@@ -1,4 +1,4 @@
-package io.github.tempjr.fintrack.domain.services;
+package io.github.tempjr.fintrack.service;
 
 import com.webcohesion.ofx4j.domain.data.MessageSetType;
 import com.webcohesion.ofx4j.domain.data.ResponseEnvelope;
@@ -8,18 +8,20 @@ import com.webcohesion.ofx4j.domain.data.banking.BankStatementResponseTransactio
 import com.webcohesion.ofx4j.domain.data.banking.BankingResponseMessageSet;
 import com.webcohesion.ofx4j.domain.data.common.Transaction;
 import com.webcohesion.ofx4j.io.AggregateUnmarshaller;
-import io.github.tempjr.fintrack.domain.model.Conta;
-import io.github.tempjr.fintrack.domain.model.Transacao;
-import io.github.tempjr.fintrack.domain.services.interfaces.ImportService;
-import io.github.tempjr.fintrack.repository.ContaRepository;
+import io.github.tempjr.fintrack.model.Conta;
+import io.github.tempjr.fintrack.model.Transacao;
 import io.github.tempjr.fintrack.repository.TransacaoRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -27,89 +29,73 @@ import java.util.Set;
 @Service
 public class ImportServiceImpl implements ImportService {
 
-    private final ContaRepository contaRepository;
+    private static final Logger log = LoggerFactory.getLogger(ImportServiceImpl.class);
+
+    private final ContaService contaService;
+    // Temporário: pela regra das camadas, quem usa TransacaoRepository é o TransacaoService (Etapa 3).
     private final TransacaoRepository transacaoRepository;
 
-    public ImportServiceImpl(TransacaoRepository transacaoRepository, ContaRepository contaRepository) {
+    public ImportServiceImpl(ContaService contaService, TransacaoRepository transacaoRepository) {
+        this.contaService = contaService;
         this.transacaoRepository = transacaoRepository;
-        this.contaRepository = contaRepository;
     }
 
     @Override
     @Transactional
-    public int importar(long contaId, File file) {
-        Conta conta = buscarConta(contaId);
-
-        Set<Transacao> listaTransacoes = new HashSet<Transacao>();
-
-        if (file == null || conta == null || !conta.isAtiva()) {
-            throw new IllegalArgumentException("Arquivo não pode ser nulo");
+    public int importar(Long contaId, File arquivo) {
+        if (arquivo == null) {
+            throw new IllegalArgumentException("arquivo é obrigatório");
+        }
+        Conta conta = contaService.buscarPorId(contaId);
+        if (!conta.isAtiva()) {
+            throw new IllegalArgumentException("conta " + contaId + " está inativa");
         }
 
-        try {
-            AggregateUnmarshaller au = new AggregateUnmarshaller(ResponseEnvelope.class);
-            ResponseEnvelope envelope = (ResponseEnvelope) au.unmarshal(new FileInputStream(file));
+        List<Transacao> lidas = lerTransacoes(arquivo, conta);
+        List<Transacao> novas = new ArrayList<>();
+        Set<String> chavesNoArquivo = new HashSet<>();
 
-            MessageSetType type = MessageSetType.banking;
-            ResponseMessageSet messageSet = envelope.getMessageSet(type);
+        for (Transacao transacao : lidas) {
+            boolean repetidaNoArquivo = !chavesNoArquivo.add(transacao.getDedupKey());
+            boolean jaGravada = transacaoRepository.existsByContaIdAndDedupKey(contaId, transacao.getDedupKey());
+            if (!repetidaNoArquivo && !jaGravada) {
+                novas.add(transacao);
+            }
+        }
+        transacaoRepository.saveAll(novas);
 
-            if (messageSet != null) {
-                Transacao extrato;
+        // Só contagens e ids no log (RNF08).
+        log.info("Importação conta {}: {} lidas, {} novas, {} duplicadas",
+                contaId, lidas.size(), novas.size(), lidas.size() - novas.size());
+        return novas.size();
+    }
 
-                List<ResponseMessage> bank = ((BankingResponseMessageSet) messageSet).getResponseMessages();
-                for (int i = 0; i < bank.size(); i++) {
-                    BankStatementResponseTransaction bs = (BankStatementResponseTransaction) bank.get(i);
-                    List<Transaction> transacoes = bs.getMessage().getTransactionList().getTransactions();
-
-                    for (int j = 0; j < transacoes.size(); j++) {
-                        Transaction transacao = transacoes.get(j);
-                        extrato = new Transacao();
-
-                        extrato.setId(Long.valueOf(transacao.getId()));
-                        extrato.setData(transacao.getDatePosted().toInstant().atZone(ZoneId.systemDefault()).toLocalDate());
-                        extrato.setDescricao(transacao.getMemo());
-                        extrato.setValor(BigDecimal.valueOf(transacao.getAmount()));
-                        extrato.setConta(conta);
-
-                        listaTransacoes.add(extrato);
-                        conta.setTransacoes(listaTransacoes);
-
-                        System.out.println("Transação importada: " + extrato.getData() + " - " + extrato.getDescricao() + " - " + extrato.getValor());
-                    }
-                    salvarTransacoes(listaTransacoes.stream().toList());
+    private List<Transacao> lerTransacoes(File arquivo, Conta conta) {
+        List<Transacao> resultado = new ArrayList<>();
+        try (InputStream in = new FileInputStream(arquivo)) {
+            AggregateUnmarshaller<ResponseEnvelope> unmarshaller = new AggregateUnmarshaller<>(ResponseEnvelope.class);
+            ResponseEnvelope envelope = unmarshaller.unmarshal(in);
+            ResponseMessageSet messageSet = envelope.getMessageSet(MessageSetType.banking);
+            if (messageSet == null) {
+                return resultado;
+            }
+            for (ResponseMessage mensagem : ((BankingResponseMessageSet) messageSet).getResponseMessages()) {
+                BankStatementResponseTransaction extrato = (BankStatementResponseTransaction) mensagem;
+                for (Transaction t : extrato.getMessage().getTransactionList().getTransactions()) {
+                    resultado.add(new Transacao(
+                            conta,
+                            t.getId(),
+                            // TODO Etapa 4: usar a data do arquivo sem depender do fuso da máquina (estado §7, item 7).
+                            t.getDatePosted().toInstant().atZone(ZoneId.systemDefault()).toLocalDate(),
+                            // TODO Etapa 4: evitar a passagem por double (estado §7, item 6).
+                            BigDecimal.valueOf(t.getAmount()),
+                            t.getMemo() != null ? t.getMemo() : (t.getName() != null ? t.getName() : "")));
                 }
             }
-
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao importar arquivo OFX: " + e.getMessage(), e);
+            // TODO Etapa 4: exceção própria (ArquivoInvalidoException) com mensagem clara (RF09).
+            throw new IllegalStateException("Erro ao ler arquivo OFX", e);
         }
-        return listaTransacoes.size();
-    }
-
-    @Override
-    public Conta buscarConta(long contaId) {
-        return contaRepository.findById(contaId).orElseThrow(() -> new RuntimeException("Conta não encontrada: " + contaId));
-    }
-
-    @Override
-    public List<Transacao> listarTransacoes(Conta conta) {
-        return transacaoRepository.findAll();
-    }
-
-    @Override
-    @Transactional
-    public void salvarTransacoes(List<Transacao> transacoes) {
-        if (transacoes == null || transacoes.isEmpty()) {
-            throw new IllegalArgumentException("Lista de transações não pode ser nula ou vazia");
-        }
-
-        for (Transacao transacao : transacoes) {
-            if (transacaoRepository.existsById(transacao.getId())) {
-                System.out.println("Transação já existe: " + transacao.getId());
-            } else {
-                transacaoRepository.save(transacao);
-                System.out.println("Transação salva: " + transacao.getId());
-            }
-        }
+        return resultado;
     }
 }

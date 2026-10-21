@@ -1,18 +1,14 @@
-package io.github.tempjr.fintrack.domain.services.interfaces;
-
-import io.github.tempjr.fintrack.domain.model.Conta;
-import io.github.tempjr.fintrack.domain.model.Transacao;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+package io.github.tempjr.fintrack.service;
 
 import java.io.File;
-import java.util.List;
 
 public interface ImportService {
-    int importar(long contaId, File file);
-    Conta buscarConta(long contaId);
 
-    @Query("SELECT t FROM Transacao t WHERE t.conta = :contaId")
-    List<Transacao> listarTransacoes(@Param("conta") Conta conta);
-    void salvarTransacoes(List<Transacao> transacoes);
+    /**
+     * Protótipo: lê um OFX do disco e grava as transações novas.
+     * Será substituído na Etapa 4 (upload multipart, parser via Strategy, validação, auditoria).
+     *
+     * @return quantidade de transações novas gravadas
+     */
+    int importar(Long contaId, File arquivo);
 }

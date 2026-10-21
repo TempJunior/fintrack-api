@@ -1,5 +1,7 @@
-package io.github.tempjr.fintrack.domain.enuns;
+package io.github.tempjr.fintrack.model.enums;
 
 public enum TipoConta {
-    CORRENTE, POUPANCA, CARTAO
+    CORRENTE,
+    POUPANCA,
+    CARTAO
 }

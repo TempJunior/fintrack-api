@@ -1,7 +1,11 @@
-package io.github.tempjr.fintrack.domain.services.interfaces;
+package io.github.tempjr.fintrack.service;
 
-import io.github.tempjr.fintrack.domain.model.Conta;
+import io.github.tempjr.fintrack.model.Conta;
 
 public interface ContaService {
-    void criarConta(Conta conta);
+
+    Conta criarConta(Conta conta);
+
+    /** @throws io.github.tempjr.fintrack.exception.RecursoNaoEncontradoException se não existir */
+    Conta buscarPorId(Long id);
 }

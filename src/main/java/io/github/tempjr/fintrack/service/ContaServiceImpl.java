@@ -1,11 +1,13 @@
-package io.github.tempjr.fintrack.domain.services;
+package io.github.tempjr.fintrack.service;
 
-import io.github.tempjr.fintrack.domain.model.Conta;
-import io.github.tempjr.fintrack.domain.services.interfaces.ContaService;
+import io.github.tempjr.fintrack.exception.RecursoNaoEncontradoException;
+import io.github.tempjr.fintrack.model.Conta;
 import io.github.tempjr.fintrack.repository.ContaRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Transactional(readOnly = true)
 public class ContaServiceImpl implements ContaService {
 
     private final ContaRepository contaRepository;
@@ -15,18 +17,15 @@ public class ContaServiceImpl implements ContaService {
     }
 
     @Override
-    public void criarConta(Conta conta) {
-        try{
-            validacaoDeConta(conta);
-            contaRepository.save(conta);
-        } catch (RuntimeException e){
-            throw new RuntimeException("Erro ao criar conta: " + e.getMessage());
-        }
+    @Transactional
+    public Conta criarConta(Conta conta) {
+        // Várias contas na mesma instituição são válidas (ex.: corrente + cartão Itaú).
+        return contaRepository.save(conta);
     }
 
-    void validacaoDeConta(Conta conta){
-        if (contaRepository.existsByApelidoOrInstituicao(conta.getApelido(), conta.getInstituicao())){
-            throw new RuntimeException("Conta já existe com mesmo apelido ou instituição.");
-        }
+    @Override
+    public Conta buscarPorId(Long id) {
+        return contaRepository.findById(id)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Conta", id));
     }
 }
