@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Projeto | Fintrack |
-| Versão do documento | 0.3 |
+| Versão do documento | 0.4 |
 | Documento relacionado | fintrack-srs.md (requisitos, v0.2) · fintrack-modelo-dados.md (diagramas) |
 | Status | Backend organizado em camadas MVC (ADR-009) — sujeita a refino durante implementação |
 | Última atualização | 2026-10-20 |
@@ -224,40 +224,47 @@ public interface StatementParser {
     ParsedStatement parse(InputStream in, ImportContext ctx);
 }
 
-// Contexto conhecido no momento do upload
+// Contexto conhecido no momento do upload. O charset não entra aqui: no OFX ele vem
+// no próprio arquivo e é lido pelo parser (ADR-004).
 public record ImportContext(
     Instituicao instituicao,
     StatementFormat formato,
-    String nomeArquivo,
-    Charset charset) { }
+    String nomeArquivo) { }
 
 public enum StatementFormat { OFX_V1, OFX_V2 }  // CSV: Evolução Futura (Apêndice A)
 ```
 
-Implementações concretas (infraestrutura):
-- `OfxStatementParser` — envolve a lib ofx4j; serve qualquer banco em OFX.
+Implementações concretas (pacote `parser`):
+- `OfxStatementParser` — envolve a lib ofx4j; serve qualquer banco em OFX, extrato de conta (`BANKMSGSRSV1`) e de cartão (`CREDITCARDMSGSRSV1`), um extrato por arquivo. Ajustes sobre a lib:
+  - **Encoding:** a ofx4j 1.39 lê tudo como ISO-8859-1. O `OfxCharset` lê o encoding declarado no arquivo e entrega à lib um `Reader` já decodificado (ADR-004).
+  - **Datas:** a ofx4j converte a data num instante e assume UTC quando não há fuso; nenhum fuso fixo acerta a volta para `LocalDate`. O `OfxDataLiteralConversion` faz a lib usar só os 8 primeiros dígitos (data literal, §4.2).
+  - **Valor:** lido com `getBigDecimalAmount()`, sem passar por `double` (ADR-003).
 
 ### 7.2 Resolução (Factory / Registry)
 `StatementParserResolver` recebe, via injeção do Spring, a **lista de todos** os `StatementParser` registrados e escolhe o primeiro cujo `supports(ctx)` é verdadeiro. Adicionar um banco/formato novo = criar uma nova classe `@Component` — nenhum `switch` gigante, nenhum código existente alterado (Princípio Aberto/Fechado).
 
 ### 7.3 Detecção de formato
 `FormatDetector` inspeciona os primeiros bytes/linhas:
-- `OFXHEADER:` / `<OFX>` (após o cabeçalho SGML) → OFX_V1.
+- `OFXHEADER:` no início (cabeçalho SGML; BOM e espaços ignorados) → OFX_V1.
 - Declaração XML + `<?OFX ...?>` → OFX_V2.
 - Qualquer outra coisa (PDF, CSV, imagem) → rejeitado com mensagem clara (RF09). O app filtra o seletor de arquivos, mas o backend **não confia** nisso.
 
 ### 7.4 Orquestração (ImportService — caso de uso do Fluxo B)
 1. Detectar formato → resolver parser.
 2. `parse` → `ParsedStatement`.
-3. **Validar** (senão, aborta sem persistir):
-   - Checksum: soma das transações confere com o saldo/resumo declarado.
-   - Conta: `declaredAccount` do arquivo bate com a conta selecionada.
+3. **Validar a conta declarada** (senão, aborta sem persistir — D-09, D-13):
+   - Tipo: extrato de cartão só em conta `CARTAO`; extrato de conta só nas demais.
+   - Banco: `BANKID` do arquivo igual ao código da instituição (ignorando zeros à esquerda).
+   - Número: `ACCTID` vinculado à conta na 1ª importação e conferido nas seguintes.
+   - *Checksum:* não se aplica ao OFX (só traz o saldo final, sem saldo inicial nem totais). Fica para o CSV (Apêndice A).
 4. Delegar ao `TransacaoService` a dedup + persistência → recebe quais são novas.
-5. Delegar ao `CategorizacaoService` a categorização das novas.
-6. Gravar auditoria `Importacao` + retornar `ImportResult` (lidas, novas, duplicadas, erros).
+5. Delegar ao `CategorizacaoService` a categorização das novas (Etapa 5).
+6. Gravar auditoria `Importacao` (com `LEDGERBAL` — D-10) e devolvê-la como resumo (lidas, novas, duplicadas, erros).
 
 ### 7.5 Atomicidade (resolve D-01 para o MVP)
-Decisão MVP: importação **atômica por arquivo** (tudo ou nada), envolvendo os passos 4–6 em uma transação de banco (`@Transactional`). Se a validação (passo 3) falhar, nada é persistido e o erro é reportado. A alternativa (importar as linhas boas e reportar as ruins) fica registrada como possível evolução, caso surja necessidade real.
+Decisão MVP: importação **atômica por arquivo** (tudo ou nada), envolvendo os passos 3–6 em uma transação de banco. Se algo falhar, nada é persistido (nem o vínculo do número da conta) e o erro é reportado (HTTP 422). A alternativa (importar as linhas boas e reportar as ruins) fica registrada como possível evolução, caso surja necessidade real.
+
+**Auditoria da falha (RNF12).** A tentativa que falhou também é registrada (`resultado = FALHA`, `erros = 1`). Como o rollback apagaria esse registro, o `ImportService` controla as transações com `TransactionTemplate`: leitura e parse fora de transação; passos 3–6 numa transação; se ela falhar, o registro da falha é gravado **depois**, numa transação própria. Upload acima de 5 MB é barrado antes (413) e não gera registro.
 
 ---
 
@@ -377,7 +384,7 @@ Internet
 ### ADR-004 — Respeitar o `CHARSET`/`ENCODING` do cabeçalho OFX (resolve D-02)
 **Status:** Aceito · **Data:** 2026-07-07
 **Contexto.** O OFX real do Itaú declara `ENCODING:USASCII` / `CHARSET:1252` (Windows-1252), não UTF-8. Ler como UTF-8 corromperia acentos em `MEMO`.
-**Decisão.** O parser lê o encoding declarado no cabeçalho e decodifica o arquivo de acordo. (A lib ofx4j já trata isso; a decisão fixa a regra.)
+**Decisão.** O parser lê o encoding declarado no cabeçalho e decodifica o arquivo de acordo. *(Correção v0.4: a ofx4j **não** trata isso — lê tudo como ISO-8859-1, o que quebra UTF-8 e os caracteres 0x80–0x9F do Windows-1252. O `OfxCharset` aplica a regra: v1 → `ENCODING`/`CHARSET` do cabeçalho, padrão Windows-1252; v2 → `encoding` da declaração XML, padrão UTF-8. Coberto por testes com arquivos em Windows-1252 e UTF-8.)*
 **Consequências.** (+) Acentos corretos. (−) Não confiar cegamente no default do sistema.
 
 ### ADR-005 — Chave de dedup = ID do provedor, com hash de conteúdo como fallback (rebaixa D-04)
@@ -448,6 +455,7 @@ Internet
 | D-03 | Alvos numéricos de performance | Adiado (do SRS) |
 | D-07 | Domínio para o HTTPS (registrar um próprio ou usar subdomínio de DNS dinâmico) | Em aberto — necessário antes do primeiro deploy na EC2 |
 | D-08 | Biblioteca de gráficos no app | Em aberto — decidir ao implementar os relatórios no app |
+| D-13 | Checksum da importação (§7.4) | **Resolvido** — não se aplica ao OFX (sem saldo inicial nem totais no arquivo); validação OFX = tipo + banco + número da conta. Checksum fica para o CSV |
 
 ---
 
@@ -458,6 +466,7 @@ Internet
 | 0.1 | 2026-07-07 | Arquitetura inicial: AS-IS/TO-BE, 4 fluxos, monólito modular com mapa de dependências, modelo canônico (a partir de OFX Itaú + CSV Mercado Pago), modelo de dados, estrutura de pacotes, desenho do módulo de importação, ADR-002 a 005. |
 | 0.2 | 2026-10-20 | Cliente Android nativo (§8, ADR-006). Deploy em EC2 com Caddy/HTTPS (§9, ADR-007). Autenticação por token antecipada para o MVP (ADR-008, pacote `security`). CSV do Mercado Pago removido do MVP: modelo canônico só OFX, mapeamento CSV movido para o Apêndice A. Seções 8–12 renumeradas para 9–13. |
 | 0.3 | 2026-10-20 | Backend em camadas MVC sem módulos internos (ADR-009): §3.1–3.5 e §6 reescritas, rastreabilidade ajustada, D-06 resolvido, `Money` removido do plano. Diagramas movidos para `fintrack-modelo-dados.md`. |
+| 0.4 | 2026-10-20 | Importação implementada (Etapa 4): §7.1 (`ImportContext` sem charset; ajustes de encoding, data e valor sobre a ofx4j), §7.3, §7.4 (validação da conta; checksum não se aplica ao OFX — D-13), §7.5 (auditoria da falha com `TransactionTemplate`). ADR-004 corrigido: a ofx4j não aplica o charset. |
 
 ---
 

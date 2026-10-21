@@ -23,7 +23,7 @@ class OpenApiContractTest {
     private MockMvc mockMvc;
 
     @Test
-    @DisplayName("/v3/api-docs expõe os endpoints de contas")
+    @DisplayName("/v3/api-docs expõe os endpoints de contas e importações")
     void especificacaoTemContas() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
@@ -31,6 +31,9 @@ class OpenApiContractTest {
                 .andExpect(jsonPath("$.paths['/api/v1/contas'].post").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/contas'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/contas/{id}'].patch").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/contas/{id}/inativar'].post").exists());
+                .andExpect(jsonPath("$.paths['/api/v1/contas/{id}/inativar'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/contas/{contaId}/importacoes'].post.requestBody.content['multipart/form-data']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/contas/{contaId}/importacoes'].get").exists())
+                .andExpect(jsonPath("$.components.schemas.ImportacaoResponse.properties.saldoDeclarado.type").value("string"));
     }
 }

@@ -66,6 +66,25 @@ public class Conta {
         this.ativa = false;
     }
 
+    /**
+     * Confere o número da conta declarado no arquivo (ACCTID) com o desta conta (D-09).
+     * Na primeira importação o número ainda não é conhecido: ele é vinculado à conta.
+     * Nas seguintes, um número diferente indica arquivo de outra conta.
+     *
+     * @return false se o arquivo for de outra conta
+     */
+    public boolean conferirOuVincularNumeroExterno(String numeroNoArquivo) {
+        if (numeroNoArquivo == null || numeroNoArquivo.isBlank()) {
+            return true; // arquivo sem ACCTID: nada a conferir
+        }
+        String numero = numeroNoArquivo.strip();
+        if (numeroExterno == null) {
+            numeroExterno = numero;
+            return true;
+        }
+        return numeroExterno.equals(numero);
+    }
+
     private static String validarApelido(String apelido) {
         if (apelido == null || apelido.isBlank()) {
             throw new IllegalArgumentException("apelido é obrigatório");

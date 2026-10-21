@@ -239,11 +239,15 @@ classDiagram
 classDiagram
     direction LR
 
+    class ImportController {
+        +importar(contaId, MultipartFile) ImportacaoResponse
+    }
     class ImportService {
-        +importar(contaId, MultipartFile) ImportResult
+        +importar(contaId, nomeArquivo, byte[]) Importacao
+        +listar(contaId) List~Importacao~
     }
     class FormatDetector {
-        +detectar(byte[] inicio) StatementFormat
+        +detectar(byte[]) StatementFormat
     }
     class StatementParserResolver {
         -List~StatementParser~ parsers
@@ -257,13 +261,26 @@ classDiagram
     class OfxStatementParser {
         <<Component>>
     }
+    class OfxCharset {
+        +detectar(byte[], StatementFormat) Charset$
+    }
+    class OfxDataLiteralConversion {
+        #parseDate(String) Date
+    }
     class ParsedStatement {
         <<record>>
         AccountRef declaredAccount
         LocalDate inicio
         LocalDate fim
         BigDecimal ledgerBalance
+        LocalDate dataSaldo
         List~RawTransaction~ transactions
+    }
+    class AccountRef {
+        <<record>>
+        String bankId
+        String acctId
+        boolean cartaoDeCredito
     }
     class RawTransaction {
         <<record>>
@@ -272,28 +289,24 @@ classDiagram
         BigDecimal amount
         String description
     }
-    class ImportResult {
-        <<record>>
-        int totalLido
-        int novas
-        int duplicadas
-        int erros
-    }
 
+    ImportController --> ImportService
     ImportService --> FormatDetector
     ImportService --> StatementParserResolver
+    ImportService --> TransacaoService : salvarNovas
+    ImportService --> ImportacaoRepository : auditoria
     StatementParserResolver o-- StatementParser
     OfxStatementParser ..|> StatementParser
+    OfxStatementParser --> OfxCharset : encoding (ADR-004)
+    OfxStatementParser --> OfxDataLiteralConversion : data literal
     StatementParser ..> ParsedStatement : produz
     ParsedStatement *-- RawTransaction
-    ImportService ..> ImportResult : devolve
+    ParsedStatement *-- AccountRef
 ```
 
-Essas classes ficam no pacote `parser/` (exceto `ImportService` e `ImportResult`). `ParsedStatement` e `RawTransaction` não são entidades: só carregam os dados do arquivo até o `ImportService` decidir o que gravar.
+Essas classes ficam no pacote `parser/` (exceto controller, service e repository). `ParsedStatement`, `AccountRef` e `RawTransaction` não são entidades: só carregam os dados do arquivo até o `ImportService` decidir o que gravar. O resumo devolvido ao app é a própria `Importacao` gravada (convertida em `ImportacaoResponse`).
 
-**Atomicidade × auditoria (RNF05 × RNF12):** a importação é tudo-ou-nada (`@Transactional` no `ImportService`). Se der rollback, o registro em `importacoes` também sumiria. Para registrar a falha, a gravação da auditoria de falha precisa rodar em **outra transação** (`@Transactional(propagation = REQUIRES_NEW)`) em um **bean separado** — chamar um método `@Transactional` da mesma classe ignora a anotação (guia `jpa-patterns`, "Common Transaction Mistakes").
-
----
+**Atomicidade × auditoria (RNF05 × RNF12):** a importação é tudo-ou-nada, mas a tentativa que falhou também precisa ficar registrada, e um rollback apagaria esse registro. Por isso o `ImportService` usa `TransactionTemplate` em vez de `@Transactional`: parse fora de transação → validação + gravação numa transação → se ela falhar, registro da falha numa transação própria, depois do rollback (arquitetura §7.5).
 
 ## 5. Banco de dados (PostgreSQL)
 
@@ -428,3 +441,4 @@ Registradas na §12 da arquitetura; §5.1 atualizada.
 | 0.1 | 2026-10-20 | Primeira versão: domínio puro por módulo, padrão de mapeamento domínio ↔ JPA, diagrama ER, lacunas D-09 a D-12. |
 | 0.2 | 2026-10-20 | Refeito para camadas MVC sem módulos (ADR-009): entidades JPA únicas com relacionamentos, diagrama de camadas controller/service/repository, fluxo de importação. Diagrama ER e lacunas mantidos. |
 | 0.3 | 2026-10-20 | D-09 a D-12 aprovados. |
+| 0.4 | 2026-10-20 | §4 atualizada com a importação implementada: `OfxCharset`, `OfxDataLiteralConversion`, `AccountRef`, resumo = `Importacao`, auditoria da falha com `TransactionTemplate`. |

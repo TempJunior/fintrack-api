@@ -42,6 +42,27 @@ class ContaTest {
     }
 
     @Test
+    @DisplayName("primeira importação vincula o número; as seguintes conferem (D-09)")
+    void numeroExterno() {
+        Conta conta = new Conta(Instituicao.ITAU, TipoConta.CORRENTE, "Itaú");
+
+        assertThat(conta.conferirOuVincularNumeroExterno(" 12345 ")).isTrue();
+        assertThat(conta.getNumeroExterno()).isEqualTo("12345");
+        assertThat(conta.conferirOuVincularNumeroExterno("12345")).isTrue();
+        assertThat(conta.conferirOuVincularNumeroExterno("99999")).isFalse();
+        assertThat(conta.getNumeroExterno()).isEqualTo("12345");
+    }
+
+    @Test
+    @DisplayName("arquivo sem número de conta não vincula nem rejeita")
+    void numeroExternoAusente() {
+        Conta conta = new Conta(Instituicao.ITAU, TipoConta.CORRENTE, "Itaú");
+
+        assertThat(conta.conferirOuVincularNumeroExterno(null)).isTrue();
+        assertThat(conta.getNumeroExterno()).isNull();
+    }
+
+    @Test
     @DisplayName("código da instituição é o BANKID do OFX (D-12)")
     void codigoInstituicao() {
         assertThat(Instituicao.ITAU.getCodigo()).isEqualTo("0341");

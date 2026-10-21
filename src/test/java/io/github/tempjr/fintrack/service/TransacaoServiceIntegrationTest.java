@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
@@ -45,6 +46,11 @@ class TransacaoServiceIntegrationTest {
         conta = contaRepository.save(new Conta(Instituicao.ITAU, TipoConta.CORRENTE, "Itaú"));
     }
 
+    /** Conta só as transações desta conta: o banco de teste é compartilhado com outras classes de teste. */
+    private long totalDaConta() {
+        return transacaoRepository.findByContaId(conta.getId(), PageRequest.of(0, 1)).getTotalElements();
+    }
+
     /** Simula ler o arquivo de novo: objetos novos, mesmos dados. */
     private List<Transacao> lerExtrato(String... fitIds) {
         return java.util.Arrays.stream(fitIds)
@@ -61,7 +67,7 @@ class TransacaoServiceIntegrationTest {
         assertThat(primeira.novas()).hasSize(3);
         assertThat(segunda.novas()).isEmpty();
         assertThat(segunda.duplicadas()).isEqualTo(3);
-        assertThat(transacaoRepository.count()).isEqualTo(3);
+        assertThat(totalDaConta()).isEqualTo(3);
     }
 
     @Test
@@ -73,6 +79,6 @@ class TransacaoServiceIntegrationTest {
 
         assertThat(sobreposto.novas()).extracting(Transacao::getDedupKey).containsExactly("D", "E");
         assertThat(sobreposto.duplicadas()).isEqualTo(2);
-        assertThat(transacaoRepository.count()).isEqualTo(5);
+        assertThat(totalDaConta()).isEqualTo(5);
     }
 }
