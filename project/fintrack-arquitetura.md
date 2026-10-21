@@ -191,14 +191,15 @@ io.github.tempjr.fintrack
 ├── config/                    (OpenAPI, configurações gerais)
 ├── security/                  (filtro de token, config do Spring Security — ADR-008)
 ├── controller/                (ContaController, ImportController, TransacaoController,
-│                               CategoriaController, RegraCategorizacaoController,
+│                               CategoriaController, RegraController,
 │                               RelatorioController)
 ├── service/                   (ContaService, ImportService, TransacaoService,
 │                               CategorizacaoService, RelatorioService
 │                               + implementações, se mantido o padrão interface + Impl)
 ├── repository/                (ContaRepository, TransacaoRepository, CategoriaRepository,
 │                               RegraCategorizacaoRepository, ImportacaoRepository)
-├── model/                     (Conta, Transacao, Categoria, RegraCategorizacao, Importacao)
+├── model/                     (Conta, Transacao, Categoria, RegraCategorizacao, Importacao,
+│                               DedupKey, CategorizadorPorRegras)
 │   └── enums/                 (Instituicao, TipoConta, TipoTransacao, OrigemCategoria,
 │                               Operador, StatementFormat, ResultadoImportacao)
 ├── dto/
@@ -428,7 +429,7 @@ Internet
 | RF07 / RNF04 | `dedup_key` + constraint única (§5.2); ADR-005 |
 | RF11 / RNF06 | Separação bruto imutável vs. enriquecimento (§5.1) |
 | RF14 | Campo `transferenciaInterna` (§5.1) |
-| RF15–RF20 | `CategorizacaoService` + controllers de categoria e regra; §5.1 |
+| RF15–RF20 | `CategorizacaoService`, `CategorizadorPorRegras`, `CategoriaController`, `RegraController`; reaplicação em `TransacaoService` |
 | RF21–RF26 | `RelatorioController`/`RelatorioService` |
 | RNF05 / D-01 | Importação atômica (§7.5) |
 | D-02 | ADR-004 |

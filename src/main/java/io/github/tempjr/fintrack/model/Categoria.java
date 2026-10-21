@@ -33,12 +33,24 @@ public class Categoria {
         this(nome, null);
     }
 
+    /** @param pai categoria raiz; subcategoria de subcategoria não é permitida (2 níveis) */
     public Categoria(String nome, Categoria pai) {
+        if (pai != null && pai.isSubcategoria()) {
+            throw new IllegalArgumentException("subcategoria não pode ter subcategorias (máximo de 2 níveis)");
+        }
+        this.nome = validarNome(nome);
+        this.pai = pai;
+    }
+
+    public void renomear(String novoNome) {
+        this.nome = validarNome(novoNome);
+    }
+
+    private static String validarNome(String nome) {
         if (nome == null || nome.isBlank()) {
             throw new IllegalArgumentException("nome é obrigatório");
         }
-        this.nome = nome.strip();
-        this.pai = pai;
+        return nome.strip();
     }
 
     public boolean isSubcategoria() {

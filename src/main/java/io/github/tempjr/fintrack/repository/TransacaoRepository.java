@@ -1,8 +1,10 @@
 package io.github.tempjr.fintrack.repository;
 
 import io.github.tempjr.fintrack.model.Transacao;
+import io.github.tempjr.fintrack.model.enums.OrigemCategoria;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,4 +23,12 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
 
     /** Sempre paginado (RNF03). */
     Page<Transacao> findByContaId(Long contaId, Pageable pageable);
+
+    /**
+     * Transações que as regras podem mudar: sem categoria ou categorizadas por regra (D-11).
+     * Slice em vez de Page: não precisa do total, então não roda um count por página.
+     * Ordenado por id para a paginação ser estável enquanto o lote altera as categorias.
+     */
+    @Query("select t from Transacao t where t.origemCategoria is null or t.origemCategoria = :regra order by t.id")
+    Slice<Transacao> findCategorizaveis(@Param("regra") OrigemCategoria regra, Pageable pageable);
 }

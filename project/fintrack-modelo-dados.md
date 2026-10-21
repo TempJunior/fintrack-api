@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Projeto | Fintrack |
-| Versão do documento | 0.2 |
+| Versão do documento | 0.5 |
 | Documentos relacionados | `fintrack-srs.md`, `fintrack-arquitetura.md` (ADR-009) |
 | Status | Aprovado — modelo **alvo** do MVP (D-09 a D-12 aprovados em 2026-10-20) |
 | Última atualização | 2026-10-20 |
@@ -180,7 +180,7 @@ classDiagram
     class ImportController
     class TransacaoController
     class CategoriaController
-    class RegraCategorizacaoController
+    class RegraController
     class RelatorioController
 
     class ContaService
@@ -199,7 +199,8 @@ classDiagram
     ImportController --> ImportService
     TransacaoController --> TransacaoService
     CategoriaController --> CategorizacaoService
-    RegraCategorizacaoController --> CategorizacaoService
+    RegraController --> CategorizacaoService
+    RegraController --> TransacaoService : reaplicar em lote
     RelatorioController --> RelatorioService
 
     ContaService --> ContaRepository
@@ -210,8 +211,8 @@ classDiagram
 
     ImportService --> ContaService : busca conta
     ImportService --> TransacaoService : salva novas (dedup)
-    ImportService --> CategorizacaoService : aplica regras
-    TransacaoService --> CategorizacaoService : categoria manual e lote
+    ImportService --> CategorizacaoService : aplica regras (RF17)
+    TransacaoService --> CategorizacaoService : categorizador para o lote
 
     RelatorioService --> TransacaoRepository : consultas agregadas
     RelatorioService --> ImportacaoRepository : saldo declarado
@@ -442,3 +443,4 @@ Registradas na §12 da arquitetura; §5.1 atualizada.
 | 0.2 | 2026-10-20 | Refeito para camadas MVC sem módulos (ADR-009): entidades JPA únicas com relacionamentos, diagrama de camadas controller/service/repository, fluxo de importação. Diagrama ER e lacunas mantidos. |
 | 0.3 | 2026-10-20 | D-09 a D-12 aprovados. |
 | 0.4 | 2026-10-20 | §4 atualizada com a importação implementada: `OfxCharset`, `OfxDataLiteralConversion`, `AccountRef`, resumo = `Importacao`, auditoria da falha com `TransactionTemplate`. |
+| 0.5 | 2026-10-20 | §3: `RegraController` (reaplicação em lote via `TransacaoService`). |

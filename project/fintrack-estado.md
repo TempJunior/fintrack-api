@@ -14,17 +14,18 @@ Legenda: ⬜ não iniciado · 🟨 em andamento · ✅ pronto · ⏸ adiado · �
 ---
 
 ## 1. Etapa atual
-**Etapa 4 — Importação** (✅ 2026-10-20, branch `feat/etapa-4-importacao`, aguardando commit).
-- Pacote `parser`: `FormatDetector`, `StatementParser` + `OfxStatementParser` (conta e cartão, v1 e v2), `StatementParserResolver`, `OfxCharset` (encoding — ADR-004), `OfxDataLiteralConversion` (data literal), modelo canônico (`ParsedStatement`, `AccountRef`, `RawTransaction`).
-- `ImportService` reescrito: valida tipo/banco/número da conta (D-09, D-13), grava tudo ou nada (RNF05), registra a falha depois do rollback (RNF12), grava o `LEDGERBAL` (D-10).
-- API: `POST /api/v1/contas/{contaId}/importacoes` (multipart, campo `arquivo`, até 5 MB), histórico e busca por id. Rejeição = 422, arquivo grande = 413, conflito = 409.
-- Conferido pela API com o `itau.ofx` real: 16 novas; reimportação 0 novas/16 duplicadas; na conta errada, 422.
-- 97 testes passando (arquivos OFX sintéticos em `src/test/resources/ofx`).
+**Etapa 5 — Categorização** (✅ 2026-10-20, branch `feat/etapa-5-categorizacao`, aguardando commit).
+- Categorias em 2 níveis (`/api/v1/categorias`: criar, listar em árvore, buscar, renomear); nome repetido no mesmo nível = 409.
+- Regras (`/api/v1/regras`: criar, listar em ordem de avaliação, excluir). CONTAINS/STARTS_WITH ignoram maiúsculas e acentos; REGEX validada na criação.
+- `CategorizadorPorRegras` (Java puro): menor prioridade vence; empate → regra mais antiga.
+- Importação já categoriza as transações antes de gravar (RF17).
+- `POST /api/v1/regras/reaplicar` (RF19): lote em fatias de 500; nunca toca nas `MANUAL`; categorizada por regra que não casa mais volta a "Não categorizado".
+- 123 testes passando.
 
-Etapas 1, 2 e 3 concluídas (Etapa 1 sem o 1.3, adiado por falta de Docker).
+Etapas 1 a 4 concluídas (Etapa 1 sem o 1.3, adiado por falta de Docker).
 
 ## 2. Próximo passo
-**Etapa 5 — Categorização:** categorias e subcategorias, regras (contém / começa com / regex), `CategorizacaoService`, aplicação automática na importação (o `TODO` no `ImportServiceImpl.persistir`) e reaplicação em lote respeitando a escolha manual (RF15–RF20, D-11).
+**Etapa 6 — Transações (API):** listagem paginada com filtros combináveis (período, conta, categoria, tipo, texto — RF12, RNF03), detalhe, enriquecimento (categoria manual, nota, tags — RF13, RF18) e transferência interna (RF14).
 
 Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil apontando para ele e Testcontainers nos testes de integração.
 
@@ -61,16 +62,16 @@ Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil a
 | Pacote | Conteúdo |
 |---|---|
 | `FintrackApplication` | Main do Spring Boot |
-| `model` | Entidades JPA: `Conta`, `Transacao`, `Categoria`, `RegraCategorizacao`, `Importacao`; `DedupKey` (cálculo da chave de dedup) |
+| `model` | Entidades JPA: `Conta`, `Transacao`, `Categoria` (2 níveis, renomear), `RegraCategorizacao` (`corresponde`), `Importacao`; `DedupKey`, `CategorizadorPorRegras` (Java puro) |
 | `model.enums` | `Instituicao` (com código do banco), `TipoConta`, `TipoTransacao`, `OrigemCategoria`, `Operador`, `StatementFormat`, `ResultadoImportacao` |
-| `service` | `ContaService`/`Impl` (criar, listar, buscar, renomear, inativar), `TransacaoService`/`Impl` (`salvarNovas` com dedup) + `ResultadoDedup`, `ImportService`/`Impl` (Fluxo B completo com `TransactionTemplate`) |
+| `service` | `ContaService`/`Impl` (criar, listar, buscar, renomear, inativar), `TransacaoService`/`Impl` (`salvarNovas` com dedup, `reaplicarRegras`) + `ResultadoDedup`, `ResultadoReaplicacao`, `CategorizacaoService`/`Impl` (categorias, regras, `aplicarRegras`), `ImportService`/`Impl` (Fluxo B completo com `TransactionTemplate`) |
 | `parser` | `FormatDetector`, `StatementParser`, `OfxStatementParser`, `StatementParserResolver`, `OfxCharset`, `OfxDataLiteralConversion`, `ImportContext`, `ParsedStatement`, `AccountRef`, `RawTransaction` |
-| `repository` | `ContaRepository` (listagens ordenadas), `TransacaoRepository` (`findDedupKeysExistentes`, `findByContaId` paginado), `ImportacaoRepository` (histórico) |
-| `controller` | `ContaController` (`/api/v1/contas`), `ImportController` (`/api/v1/contas/{contaId}/importacoes`) |
-| `dto` | `request/CriarContaRequest`, `request/AtualizarContaRequest`, `response/ContaResponse`, `response/ImportacaoResponse` (dinheiro como string) |
+| `repository` | `ContaRepository`, `TransacaoRepository` (`findDedupKeysExistentes`, `findByContaId`, `findCategorizaveis` em Slice), `ImportacaoRepository`, `CategoriaRepository` (`existeNomeNoNivel`), `RegraCategorizacaoRepository` (`findAllComCategoria` com JOIN FETCH) |
+| `controller` | `ContaController`, `ImportController`, `CategoriaController` (`/api/v1/categorias`), `RegraController` (`/api/v1/regras`) |
+| `dto` | Requests: `CriarContaRequest`, `AtualizarContaRequest`, `CriarCategoriaRequest`, `RenomearCategoriaRequest`, `CriarRegraRequest`. Responses: `ContaResponse`, `ImportacaoResponse` (dinheiro como string), `CategoriaResponse` (árvore), `RegraResponse` |
 | `config` | `OpenApiConfig` |
-| `exception` | `RecursoNaoEncontradoException`, `ImportacaoRejeitadaException`, `ArquivoInvalidoException`, `GlobalExceptionHandler` (ProblemDetail: 400, 404, 409, 413, 422, 500) |
-| `src/test` | Unitários sem Spring: `ContaTest`, `TransacaoTest`, `DedupKeyTest`, `ContaServiceImplTest`, `TransacaoServiceImplTest`. Parser: `OfxStatementParserTest`, `FormatDetectorTest`, `OfxCharsetTest`. Web: `ContaControllerTest`, `ImportControllerTest` (`@WebMvcTest`). Integração: `TransacaoRepositoryTest`, `TransacaoServiceIntegrationTest` (`@DataJpaTest` + Flyway), `ImportServiceIntegrationTest` (`@SpringBootTest`, sem transação de teste, limpa o banco antes e depois), `OpenApiContractTest`. `FintrackApplicationTests` |
+| `exception` | `RecursoNaoEncontradoException`, `ImportacaoRejeitadaException`, `ArquivoInvalidoException`, `ConflitoException`, `GlobalExceptionHandler` (ProblemDetail: 400, 404, 409, 413, 422, 500) |
+| `src/test` | Unitários sem Spring: `ContaTest`, `TransacaoTest`, `DedupKeyTest`, `RegraCategorizacaoTest`, `ContaServiceImplTest`, `TransacaoServiceImplTest`, `CategorizacaoServiceImplTest`. Parser: `OfxStatementParserTest`, `FormatDetectorTest`, `OfxCharsetTest`. Web: `ContaControllerTest`, `ImportControllerTest` (`@WebMvcTest`). Integração: `TransacaoRepositoryTest`, `TransacaoServiceIntegrationTest` (`@DataJpaTest` + Flyway), `ImportServiceIntegrationTest` e `CategorizacaoApiIntegrationTest` (`@SpringBootTest`, sem transação de teste, limpam o banco antes e depois), `OpenApiContractTest`. `FintrackApplicationTests` |
 | `resources/db/migration` | `V1__schema_inicial.sql` (6 tabelas, constraints e índices do modelo) |
 | `test/resources/ofx` | OFX **sintéticos**: Itaú v1 em Windows-1252 (com `–` para pegar erro de encoding), cartão v2 UTF-8 com FITID UUID e datas sem fuso, corrompido, PDF e CSV. `*.ofx` marcado como `binary` no `.gitattributes` |
 | `arquivos/itau.ofx` | Extrato real Itaú (16 transações, jun–jul/2026) — fora do git |
@@ -85,11 +86,11 @@ Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil a
 | Esqueleto do projeto (build, formatador, perfis) | 🟨 | Maven + Boot 3.5.16 + Java 21 + git; pacotes por camada; Flyway + `validate`; perfis `dev`/`test`. Falta formatador, perfil `prod` e Postgres |
 | Segurança (filtro de token) | ⬜ | |
 | Contas | ✅ | Entidade, service e API completos (RF01–RF03). `numeroExterno` só será preenchido pela importação (Etapa 4) |
-| Importação (detector, parser OFX, ImportService) | ✅ | Conta e cartão, v1 e v2; upload; validação da conta; atomicidade; auditoria. Falta só a categorização automática (Etapa 5) |
+| Importação (detector, parser OFX, ImportService) | ✅ | Conta e cartão, v1 e v2; upload; validação da conta; atomicidade; auditoria; categorização automática |
 | Transações (dedup, enriquecimento) | 🟨 | Núcleo ✅: entidade com bruto imutável, `dedupKey`, `TransacaoService.salvarNovas` idempotente. Falta API de listagem/enriquecimento (Etapa 6) |
-| Categorização (categorias, regras) | ⬜ | Entidades `Categoria` (com pai) e `RegraCategorizacao`; sem lógica de regra |
+| Categorização (categorias, regras) | ✅ | Categorias (2 níveis), regras, aplicação na importação, reaplicação em lote (RF15–RF20) |
 | Relatórios | ⬜ | |
-| OpenAPI / Swagger | 🟨 | springdoc configurado; cobre contas e importações. Cresce a cada endpoint novo |
+| OpenAPI / Swagger | 🟨 | springdoc configurado; cobre contas, importações, categorias e regras. Cresce a cada endpoint novo |
 
 ### Infraestrutura
 | Item | Status | Observações |
@@ -126,6 +127,14 @@ Decisões pequenas que ainda não viraram ADR. Se uma delas crescer, promova par
 - 2026-07 — `Conta.id` = BANKID do OFX (ex.: Itaú 0341) — vincular o arquivo à conta sem seleção manual. **Revisar** (ver §7).
 - 2026-07 — `Transacao.id` = FITID do OFX, usado também para deduplicação. **Revisar** (ver §7).
 - 2026-10-20 — Backend em camadas MVC (controller/service/repository), sem módulos internos e com entidade JPA única — **ADR-009**. Resolve o D-06; `Money` sai do plano.
+- 2026-10-20 — Categorização (Etapa 5):
+  - CONTAINS e STARTS_WITH ignoram maiúsculas e acentos (bancos escrevem em caixa alta e às vezes sem acento); REGEX ignora maiúsculas e é validada na criação (400 se inválida).
+  - Ordem de avaliação: menor prioridade primeiro; empate → regra criada antes. A primeira que casa vence.
+  - Categorias em no máximo 2 níveis (exemplo do RF15). Nome único por nível sem diferenciar maiúsculas (409); a constraint do banco é a rede de segurança.
+  - Categorias não são excluídas (só renomeadas): nenhum RF pede, e excluir categoria em uso exigiria decidir o destino das transações. Regras podem ser excluídas.
+  - Na importação, as regras rodam antes de gravar (INSERT já com categoria, sem UPDATE depois).
+  - Reaplicar (RF19): recalcula transações sem categoria ou com origem REGRA; as MANUAL nem entram; se nenhuma regra casa mais, volta a "Não categorizado". Em fatias de 500 (`Slice`, sem count).
+  - Endpoint de reaplicação fica em `/api/v1/regras/reaplicar`, mas quem altera as transações é o `TransacaoService` (dono do repository).
 - 2026-10-20 — Importação (Etapa 4):
   - **D-13:** checksum da §7.4 não se aplica ao OFX (o arquivo só traz o saldo final). Validação OFX = tipo (conta × cartão) + banco (`BANKID`, sem zeros à esquerda) + número (`ACCTID`, D-09).
   - **Encoding:** descoberto que a ofx4j lê tudo como ISO-8859-1; `OfxCharset` aplica o encoding do arquivo (ADR-004 corrigido).
@@ -171,7 +180,7 @@ Cada etapa termina em algo que roda e tem teste. A ordem segue as dependências 
 | 2 | Contas + padrão de API | `ContaController`/`ContaService` (criar, listar, editar, inativar); DTOs; `ProblemDetail`; springdoc-openapi | RF01–RF03, RNF22 | ✅ |
 | 3 | Transações (núcleo) | `Transacao` imutável no bruto; cálculo da `dedupKey`; `TransacaoService` com dedup e constraint única | RF07, RF11, RNF04, RNF06, ADR-005 | ✅ |
 | 4 | Importação | ✅ `FormatDetector`, `OfxStatementParser` (Strategy), resolver, upload multipart, validação (checksum + conta), atomicidade, auditoria (inclusive falha) | RF04–RF09, RNF05, RNF12, ADR-002, ADR-004 | ✅ |
-| 5 | Categorização | Categorias/subcategorias, regras, `CategorizacaoService`, aplicação na importação, reaplicar em lote | RF15–RF20 | ⬜ |
+| 5 | Categorização | ✅ Categorias/subcategorias, regras, `CategorizacaoService`, aplicação na importação, reaplicar em lote | RF15–RF20 | ✅ |
 | 6 | Transações (API) | Listagem paginada com filtros, enriquecimento, transferência interna | RF12–RF14, RF18, RNF03 | ⬜ |
 | 7 | Relatórios | Receitas × despesas, por categoria, evolução mensal, comparativo, saldos | RF21–RF26 | ⬜ |
 | 8 | Segurança | Filtro de token, health check liberado, Swagger fechado em prod | RNF11, ADR-008 | ⬜ |

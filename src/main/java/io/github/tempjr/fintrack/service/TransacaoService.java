@@ -17,4 +17,11 @@ public interface TransacaoService {
      * @throws IllegalArgumentException se alguma transação for de outra conta
      */
     ResultadoDedup salvarNovas(Conta conta, List<Transacao> transacoes);
+
+    /**
+     * Reaplica as regras atuais em todas as transações sem categoria ou categorizadas por regra (RF19).
+     * Escolhas manuais nunca são tocadas (RF18, D-11). Se nenhuma regra casa mais com uma transação
+     * categorizada por regra, ela volta a "Não categorizado" (RF20).
+     */
+    ResultadoReaplicacao reaplicarRegras();
 }

@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(TransacaoServiceImpl.class)
+@Import({TransacaoServiceImpl.class, CategorizacaoServiceImpl.class})
 @DisplayName("TransacaoService (integração)")
 class TransacaoServiceIntegrationTest {
 

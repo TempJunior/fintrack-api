@@ -27,7 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Orquestra o Fluxo B: detectar formato → parse → validar conta → dedup + gravar → auditoria.
+ * Orquestra o Fluxo B: detectar formato → parse → validar conta → categorizar → dedup + gravar → auditoria.
  * <p>
  * Transações controladas com {@link TransactionTemplate} (e não {@code @Transactional}) porque a
  * falha precisa ser registrada <b>depois</b> do rollback, numa transação própria. Com
@@ -41,6 +41,7 @@ public class ImportServiceImpl implements ImportService {
 
     private final ContaService contaService;
     private final TransacaoService transacaoService;
+    private final CategorizacaoService categorizacaoService;
     private final ImportacaoRepository importacaoRepository;
     private final FormatDetector formatDetector;
     private final StatementParserResolver parserResolver;
@@ -48,12 +49,14 @@ public class ImportServiceImpl implements ImportService {
 
     public ImportServiceImpl(ContaService contaService,
                              TransacaoService transacaoService,
+                             CategorizacaoService categorizacaoService,
                              ImportacaoRepository importacaoRepository,
                              FormatDetector formatDetector,
                              StatementParserResolver parserResolver,
                              TransactionTemplate transactionTemplate) {
         this.contaService = contaService;
         this.transacaoService = transacaoService;
+        this.categorizacaoService = categorizacaoService;
         this.importacaoRepository = importacaoRepository;
         this.formatDetector = formatDetector;
         this.parserResolver = parserResolver;
@@ -96,8 +99,10 @@ public class ImportServiceImpl implements ImportService {
         validarContaDeclarada(conta, extrato.declaredAccount());
 
         List<Transacao> transacoes = converter(conta, extrato.transactions());
+        // Categoriza antes de gravar (RF17): as novas já entram com categoria, sem UPDATE depois.
+        // As duplicadas também passam pelas regras, mas são descartadas pelo salvarNovas.
+        categorizacaoService.aplicarRegras(transacoes);
         ResultadoDedup resultado = transacaoService.salvarNovas(conta, transacoes);
-        // TODO Etapa 5: aplicar as regras de categorização nas novas (RF17).
 
         return importacaoRepository.save(Importacao.sucesso(conta, nome, formato,
                 resultado.totalLido(), resultado.novas().size(), resultado.duplicadas(),

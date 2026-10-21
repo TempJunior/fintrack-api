@@ -48,6 +48,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(ConflitoException.class)
+    public ProblemDetail handleConflitoDeNegocio(ConflitoException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Conflito");
+        return problem;
+    }
+
     /** Constraint do banco violada. Na importação: duas importações simultâneas do mesmo arquivo. */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail handleConflito(DataIntegrityViolationException ex) {

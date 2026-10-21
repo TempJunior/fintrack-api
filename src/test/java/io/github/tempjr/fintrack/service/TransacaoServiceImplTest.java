@@ -35,6 +35,9 @@ class TransacaoServiceImplTest {
     @Mock
     private TransacaoRepository transacaoRepository;
 
+    @Mock
+    private CategorizacaoService categorizacaoService;
+
     @InjectMocks
     private TransacaoServiceImpl transacaoService;
 
