@@ -26,7 +26,7 @@ Legenda: ⬜ não iniciado · 🟨 em andamento · ✅ pronto · ⏸ adiado · �
 ## 2. Próximo passo
 Duas frentes independentes; a ordem depende de ter Docker:
 - **Com Docker:** 1.3 (Postgres no compose + driver + Testcontainers) e depois **Etapa 9 — Infra/deploy** (Dockerfile, compose com Caddy, EC2, domínio D-07, backup).
-- **Sem Docker:** **Etapa 10 — App Android**, contra o backend local (`http://10.0.2.2:8080` no emulador, token de dev).
+- **Sem Docker:** **Etapa 10 — App Android**, contra o backend local (`http://10.0.2.2:8080` no emulador, token de dev), seguindo o `fintrack-android-api.md`.
 
 ---
 
@@ -57,7 +57,7 @@ Duas frentes independentes; a ordem depende de ter Docker:
 
 **Outros fatos do repositório**
 - Repositório git criado (remote `TempJunior/fintrack-api`); primeiro commit só com `src/`. `.gitignore` exclui `data/`, `arquivos/`, `*.ofx` (exceto em `src/test/resources`) e `.env` (2026-10-20).
-- Documentos do projeto em `project/` (SRS, arquitetura, modelo de dados, estado, guia Java) e instruções em `context/`.
+- Documentos do projeto em `project/` (SRS, arquitetura, modelo de dados, estado, guia Java, guia do app Android `fintrack-android-api.md` e especificação `fintrack-openapi.json`) e instruções em `context/`.
 - `pom.xml` com metadados vazios (`name`, `description`, `scm` etc. gerados pelo Initializr).
 
 ### Mapa do código (`io.github.tempjr.fintrack`)
@@ -106,7 +106,7 @@ Duas frentes independentes; a ordem depende de ter Docker:
 ### App Android
 | Feature | Status | Observações |
 |---|---|---|
-| Esqueleto (Compose, Hilt, Retrofit, tema) | ⬜ | Nenhum código Android no repositório |
+| Esqueleto (Compose, Hilt, Retrofit, tema) | ⬜ | Nenhum código Android ainda. Guia técnico pronto: `fintrack-android-api.md` (2026-10-20) |
 | `settings` (servidor + token) | ⬜ | |
 | `accounts` | ⬜ | |
 | `importing` | ⬜ | |

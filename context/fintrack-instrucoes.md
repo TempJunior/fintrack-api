@@ -8,11 +8,12 @@ O Junior é desenvolvedor júnior com base em Java e Spring. Kotlin, Android, Do
 
 ## Fontes da verdade
 
-O conhecimento do projeto tem cinco documentos, cada um com um papel:
+O conhecimento do projeto tem estes documentos, cada um com um papel:
 
 - `fintrack-srs.md` diz **o que** o sistema faz (requisitos RF/RNF, escopo do MVP, premissas).
 - `fintrack-arquitetura.md` diz **como** ele é construído (camadas, regras de dependência, modelo canônico, modelo de dados, cliente Android, infraestrutura, ADRs).
 - `fintrack-modelo-dados.md` detalha o modelo em diagramas: classes de domínio, mapeamento objeto-relacional e tabelas do banco. Detalha a §5 e a §6 da arquitetura; se divergir dela, a arquitetura prevalece até a divergência ser resolvida.
+- `fintrack-android-api.md` é o guia técnico do app Android: autenticação, convenções do JSON, erros, paginação, endpoints e telas. O contrato formal é o `fintrack-openapi.json` (exportado do backend); se o guia divergir dele, a especificação vale. Ao mudar a API, regenere a especificação e atualize o guia.
 - `fintrack-estado.md` diz **onde o desenvolvimento está** (etapa atual, progresso, decisões recentes).
 - `fintrack-guia-java.md` traz **boas práticas gerais** de Java e Spring (skills do repositório claude-code-java). É referência, não requisito: quando divergir dos três documentos acima, eles prevalecem.
 

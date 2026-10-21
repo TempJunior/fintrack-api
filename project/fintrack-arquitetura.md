@@ -292,6 +292,7 @@ Cliente fino da API REST (ADR-006). Não contém regra de negócio nem banco loc
 
 ### 8.3 Contrato com o backend
 - A especificação OpenAPI (RNF22) é o contrato. Mudança de API começa no backend e na spec; o app acompanha. Gerar o cliente com openapi-generator é opcional.
+- A especificação exportada fica em `fintrack-openapi.json` e o guia de uso pelo app em `fintrack-android-api.md` (autenticação, erros, paginação, endpoints por tela).
 - **Dinheiro trafega como string decimal** (ex.: `"-123.45"`) e vira `BigDecimal` no app — nunca `Double` (estende o ADR-003 ao cliente). Formatação pt-BR (`R$ 1.234,56`) só na camada de UI.
 - Datas em ISO-8601 (`yyyy-MM-dd`).
 - Erros no formato Problem Details (RFC 9457, suporte nativo via `ProblemDetail` no Spring). O app exibe o campo `detail`.

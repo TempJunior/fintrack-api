@@ -1,0 +1,1636 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Fintrack API",
+    "description": "API do Fintrack. Toda rota exige `Authorization: Bearer <token>` (exceto o health check); sem token válido, 401. Valores monetários trafegam como string decimal (ex.: \"-123.45\"); datas em ISO-8601 (yyyy-MM-dd); erros no formato Problem Details (RFC 9457).",
+    "version": "v1"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Generated server url"
+    }
+  ],
+  "security": [
+    {
+      "token": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Regras",
+      "description": "Regras de categorização automática (RF16–RF19)"
+    },
+    {
+      "name": "Relatórios",
+      "description": "Receitas × despesas, por categoria, mensal, comparativo e saldos (RF21–RF26)"
+    },
+    {
+      "name": "Importações",
+      "description": "Upload de extrato OFX e histórico de importações"
+    },
+    {
+      "name": "Contas",
+      "description": "Contas financeiras (RF01–RF03)"
+    },
+    {
+      "name": "Categorias",
+      "description": "Categorias e subcategorias (RF15)"
+    },
+    {
+      "name": "Transações",
+      "description": "Consulta paginada com filtros e enriquecimento (RF12–RF14, RF18)"
+    }
+  ],
+  "paths": {
+    "/api/v1/transacoes/{id}/categoria": {
+      "put": {
+        "tags": [
+          "Transações"
+        ],
+        "summary": "Define a categoria manualmente",
+        "description": "Origem passa a ser MANUAL: as regras não alteram mais esta transação (RF18).",
+        "operationId": "categorizar",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategorizarTransacaoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransacaoResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Transações"
+        ],
+        "summary": "Remove a categoria",
+        "description": "Volta a \"Não categorizado\" (RF20).",
+        "operationId": "removerCategoria",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransacaoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/regras": {
+      "get": {
+        "tags": [
+          "Regras"
+        ],
+        "summary": "Lista as regras",
+        "description": "Em ordem de avaliação (prioridade, depois criação).",
+        "operationId": "listar",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RegraResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Regras"
+        ],
+        "summary": "Cria uma regra",
+        "description": "Aplicada automaticamente nas próximas importações. Para o histórico, use /reaplicar.",
+        "operationId": "criar",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CriarRegraRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegraResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/regras/reaplicar": {
+      "post": {
+        "tags": [
+          "Regras"
+        ],
+        "summary": "Reaplica as regras em todas as transações",
+        "description": "Não altera categorias escolhidas manualmente (RF18). Transações categorizadas por regra que não casam mais com nenhuma voltam a \"Não categorizado\".",
+        "operationId": "reaplicar",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoReaplicacao"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/contas": {
+      "get": {
+        "tags": [
+          "Contas"
+        ],
+        "summary": "Lista as contas",
+        "description": "Ordenadas pelo apelido.",
+        "operationId": "listar_1",
+        "parameters": [
+          {
+            "name": "ativa",
+            "in": "query",
+            "description": "true = só ativas; false = só inativas; ausente = todas",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContaResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Contas"
+        ],
+        "summary": "Cadastra uma conta",
+        "description": "Moeda sempre BRL. Responde 201 com Location.",
+        "operationId": "criar_1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CriarContaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContaResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/contas/{id}/inativar": {
+      "post": {
+        "tags": [
+          "Contas"
+        ],
+        "summary": "Inativa a conta",
+        "description": "Contas não são excluídas (RF02). Responde 204.",
+        "operationId": "inativar",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v1/contas/{contaId}/importacoes": {
+      "get": {
+        "tags": [
+          "Importações"
+        ],
+        "summary": "Histórico de importações da conta",
+        "description": "Mais recente primeiro; inclui as falhas.",
+        "operationId": "listar_2",
+        "parameters": [
+          {
+            "name": "contaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ImportacaoResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Importações"
+        ],
+        "summary": "Importa um extrato OFX para a conta",
+        "description": "Tudo ou nada: se o arquivo for rejeitado, nada é gravado (422) e a tentativa aparece no histórico como FALHA. Reimportar o mesmo arquivo não duplica transações. Tamanho máximo: 5 MB.",
+        "operationId": "importar",
+        "parameters": [
+          {
+            "name": "contaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "arquivo": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Arquivo OFX (v1 ou v2) exportado pelo banco"
+                  }
+                },
+                "required": [
+                  "arquivo"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportacaoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categorias": {
+      "get": {
+        "tags": [
+          "Categorias"
+        ],
+        "summary": "Lista as categorias em árvore",
+        "description": "Raízes ordenadas por nome, com as subcategorias.",
+        "operationId": "listar_3",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CategoriaResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Categorias"
+        ],
+        "summary": "Cria uma categoria ou subcategoria",
+        "description": "Com categoriaPaiId cria subcategoria. Nome repetido no mesmo nível: 409.",
+        "operationId": "criar_2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CriarCategoriaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoriaResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/transacoes/{id}": {
+      "get": {
+        "tags": [
+          "Transações"
+        ],
+        "summary": "Detalhe de uma transação",
+        "operationId": "buscar",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransacaoResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Transações"
+        ],
+        "summary": "Atualiza nota, tags e transferência interna",
+        "description": "Campo ausente não muda. Data, valor e descrição são do banco e não podem ser alterados.",
+        "operationId": "enriquecer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnriquecerTransacaoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransacaoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/contas/{id}": {
+      "get": {
+        "tags": [
+          "Contas"
+        ],
+        "summary": "Busca uma conta pelo id",
+        "operationId": "buscar_1",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContaResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Contas"
+        ],
+        "summary": "Altera o apelido da conta",
+        "description": "Instituição e tipo não podem ser alterados.",
+        "operationId": "atualizar",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AtualizarContaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContaResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categorias/{id}": {
+      "get": {
+        "tags": [
+          "Categorias"
+        ],
+        "summary": "Busca uma categoria",
+        "operationId": "buscar_2",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoriaResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Categorias"
+        ],
+        "summary": "Renomeia uma categoria",
+        "operationId": "renomear",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenomearCategoriaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoriaResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/transacoes": {
+      "get": {
+        "tags": [
+          "Transações"
+        ],
+        "summary": "Lista transações com filtros combináveis",
+        "description": "Paginado (RNF03), mais recentes primeiro. Todos os filtros são opcionais.",
+        "operationId": "listar_4",
+        "parameters": [
+          {
+            "name": "contaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "categoriaId",
+            "in": "query",
+            "description": "Inclui as subcategorias",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "semCategoria",
+            "in": "query",
+            "description": "true = só \"Não categorizado\"",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "tipo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CREDITO",
+                "DEBITO"
+              ]
+            }
+          },
+          {
+            "name": "dataInicio",
+            "in": "query",
+            "description": "yyyy-MM-dd, inclusive",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "dataFim",
+            "in": "query",
+            "description": "yyyy-MM-dd, inclusive",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "texto",
+            "in": "query",
+            "description": "Trecho da descrição, sem diferenciar maiúsculas",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "description": "Começa em 0",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "tamanho",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginaResponseTransacaoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relatorios/saldos": {
+      "get": {
+        "tags": [
+          "Relatórios"
+        ],
+        "summary": "Saldo por conta e consolidado (RF25)",
+        "description": "Saldo informado pelo banco no extrato mais recente de cada conta ativa, com a data.",
+        "operationId": "saldos",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaldosResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relatorios/resumo": {
+      "get": {
+        "tags": [
+          "Relatórios"
+        ],
+        "summary": "Receitas, despesas e saldo do período (RF21)",
+        "operationId": "resumo",
+        "parameters": [
+          {
+            "name": "contaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "categoriaId",
+            "in": "query",
+            "description": "Inclui as subcategorias",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "dataInicio",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "dataFim",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relatorios/por-categoria": {
+      "get": {
+        "tags": [
+          "Relatórios"
+        ],
+        "summary": "Totais por categoria (RF22)",
+        "description": "Por categoria raiz (somando as subcategorias, que vêm dentro), mais despesas primeiro. \"Não categorizado\" vem por último.",
+        "operationId": "porCategoria",
+        "parameters": [
+          {
+            "name": "contaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "categoriaId",
+            "in": "query",
+            "description": "Inclui as subcategorias",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "dataInicio",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "dataFim",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CategoriaTotalResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relatorios/mensal": {
+      "get": {
+        "tags": [
+          "Relatórios"
+        ],
+        "summary": "Evolução mensal de receitas e despesas (RF23)",
+        "description": "Um item por mês, inclusive meses sem movimento. Máximo de 36 meses.",
+        "operationId": "mensal",
+        "parameters": [
+          {
+            "name": "mesInicio",
+            "in": "query",
+            "description": "yyyy-MM",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-01"
+          },
+          {
+            "name": "mesFim",
+            "in": "query",
+            "description": "yyyy-MM",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-06"
+          },
+          {
+            "name": "contaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "categoriaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MesResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relatorios/comparativo": {
+      "get": {
+        "tags": [
+          "Relatórios"
+        ],
+        "summary": "Comparativo entre meses (RF24)",
+        "description": "De 2 a 12 meses, com totais e categorias de cada um.",
+        "operationId": "comparativo",
+        "parameters": [
+          {
+            "name": "meses",
+            "in": "query",
+            "description": "Meses yyyy-MM separados por vírgula",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "example": "2026-05,2026-06"
+          },
+          {
+            "name": "contaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "categoriaId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MesResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/contas/{contaId}/importacoes/{importacaoId}": {
+      "get": {
+        "tags": [
+          "Importações"
+        ],
+        "summary": "Busca uma importação da conta",
+        "operationId": "buscar_3",
+        "parameters": [
+          {
+            "name": "contaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "importacaoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportacaoResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/regras/{id}": {
+      "delete": {
+        "tags": [
+          "Regras"
+        ],
+        "summary": "Exclui uma regra",
+        "description": "Transações já categorizadas por ela só mudam ao reaplicar as regras.",
+        "operationId": "excluir",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CategorizarTransacaoRequest": {
+        "type": "object",
+        "properties": {
+          "categoriaId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "categoriaId"
+        ]
+      },
+      "TransacaoResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "contaId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "contaApelido": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string",
+            "format": "date"
+          },
+          "valor": {
+            "type": "string",
+            "description": "Negativo = débito",
+            "example": "-150.75"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "CREDITO",
+              "DEBITO"
+            ]
+          },
+          "descricao": {
+            "type": "string",
+            "description": "Descrição original do banco; não pode ser alterada"
+          },
+          "categoriaId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Nulo = Não categorizado"
+          },
+          "categoriaNome": {
+            "type": "string"
+          },
+          "origemCategoria": {
+            "type": "string",
+            "description": "MANUAL (escolhida pelo usuário) ou REGRA; nulo se sem categoria",
+            "enum": [
+              "MANUAL",
+              "REGRA"
+            ]
+          },
+          "nota": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "transferenciaInterna": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CriarRegraRequest": {
+        "type": "object",
+        "properties": {
+          "categoriaId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "operador": {
+            "type": "string",
+            "enum": [
+              "CONTAINS",
+              "STARTS_WITH",
+              "REGEX"
+            ]
+          },
+          "padrao": {
+            "type": "string",
+            "description": "CONTAINS e STARTS_WITH ignoram maiúsculas e acentos; REGEX ignora maiúsculas",
+            "example": "padaria",
+            "maxLength": 255,
+            "minLength": 0
+          },
+          "prioridade": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Menor é avaliada primeiro; a primeira regra que casa vence",
+            "example": 10,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "categoriaId",
+          "operador",
+          "padrao",
+          "prioridade"
+        ]
+      },
+      "RegraResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "categoriaId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "categoriaNome": {
+            "type": "string"
+          },
+          "operador": {
+            "type": "string",
+            "enum": [
+              "CONTAINS",
+              "STARTS_WITH",
+              "REGEX"
+            ]
+          },
+          "padrao": {
+            "type": "string"
+          },
+          "prioridade": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ResultadoReaplicacao": {
+        "type": "object",
+        "properties": {
+          "avaliadas": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "alteradas": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CriarContaRequest": {
+        "type": "object",
+        "properties": {
+          "instituicao": {
+            "type": "string",
+            "enum": [
+              "ITAU",
+              "NUBANK",
+              "MERCADOPAGO"
+            ]
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "CORRENTE",
+              "POUPANCA",
+              "CARTAO"
+            ]
+          },
+          "apelido": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "apelido",
+          "instituicao",
+          "tipo"
+        ]
+      },
+      "ContaResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "instituicao": {
+            "type": "string",
+            "enum": [
+              "ITAU",
+              "NUBANK",
+              "MERCADOPAGO"
+            ]
+          },
+          "codigoInstituicao": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "CORRENTE",
+              "POUPANCA",
+              "CARTAO"
+            ]
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "moeda": {
+            "type": "string"
+          },
+          "ativa": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ImportacaoResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nomeArquivo": {
+            "type": "string"
+          },
+          "formato": {
+            "type": "string",
+            "description": "Nulo quando o formato não foi reconhecido",
+            "enum": [
+              "OFX_V1",
+              "OFX_V2"
+            ]
+          },
+          "dataHora": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "totalLido": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "novas": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "duplicadas": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "erros": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "resultado": {
+            "type": "string",
+            "enum": [
+              "SUCESSO",
+              "FALHA"
+            ]
+          },
+          "saldoDeclarado": {
+            "type": "string",
+            "description": "Saldo informado pelo banco no arquivo (LEDGERBAL)",
+            "example": "4807.15"
+          },
+          "dataSaldo": {
+            "type": "string",
+            "format": "date",
+            "description": "Data a que o saldo declarado se refere"
+          }
+        }
+      },
+      "CriarCategoriaRequest": {
+        "type": "object",
+        "properties": {
+          "nome": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 0
+          },
+          "categoriaPaiId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Id da categoria raiz, para criar uma subcategoria. Ausente = categoria raiz."
+          }
+        },
+        "required": [
+          "nome"
+        ]
+      },
+      "CategoriaResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "categoriaPaiId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subcategorias": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoriaResponse"
+            }
+          }
+        }
+      },
+      "EnriquecerTransacaoRequest": {
+        "type": "object",
+        "properties": {
+          "nota": {
+            "type": "string",
+            "description": "Texto vazio apaga a nota",
+            "maxLength": 500,
+            "minLength": 0
+          },
+          "tags": {
+            "type": "array",
+            "description": "Substitui todas as tags; lista vazia apaga",
+            "items": {
+              "type": "string",
+              "maxLength": 40,
+              "minLength": 0
+            },
+            "maxItems": 20,
+            "minItems": 0
+          },
+          "transferenciaInterna": {
+            "type": "boolean",
+            "description": "true = não conta como receita nem despesa nos relatórios (RF14)"
+          }
+        }
+      },
+      "AtualizarContaRequest": {
+        "type": "object",
+        "properties": {
+          "apelido": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "apelido"
+        ]
+      },
+      "RenomearCategoriaRequest": {
+        "type": "object",
+        "properties": {
+          "nome": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "nome"
+        ]
+      },
+      "PaginaResponseTransacaoResponse": {
+        "type": "object",
+        "properties": {
+          "conteudo": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransacaoResponse"
+            }
+          },
+          "pagina": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tamanho": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalElementos": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalPaginas": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ultima": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SaldoContaResponse": {
+        "type": "object",
+        "properties": {
+          "contaId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "apelido": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "CORRENTE",
+              "POUPANCA",
+              "CARTAO"
+            ]
+          },
+          "saldo": {
+            "type": "string",
+            "description": "Nulo se a conta nunca foi importada"
+          },
+          "dataSaldo": {
+            "type": "string",
+            "format": "date",
+            "description": "Data a que o saldo se refere (do extrato)"
+          }
+        }
+      },
+      "SaldosResponse": {
+        "type": "object",
+        "properties": {
+          "consolidado": {
+            "type": "string",
+            "description": "Soma dos saldos conhecidos (cartão entra negativo)"
+          },
+          "contas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SaldoContaResponse"
+            }
+          }
+        }
+      },
+      "ResumoResponse": {
+        "type": "object",
+        "properties": {
+          "receitas": {
+            "type": "string",
+            "example": "3589.90"
+          },
+          "despesas": {
+            "type": "string",
+            "description": "Valor positivo",
+            "example": "282.75"
+          },
+          "saldo": {
+            "type": "string",
+            "description": "receitas − despesas",
+            "example": "3307.15"
+          }
+        }
+      },
+      "CategoriaTotalResponse": {
+        "type": "object",
+        "properties": {
+          "categoriaId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Nulo = Não categorizado"
+          },
+          "nome": {
+            "type": "string"
+          },
+          "receitas": {
+            "type": "string"
+          },
+          "despesas": {
+            "type": "string",
+            "description": "Valor positivo"
+          },
+          "quantidade": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subcategorias": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoriaTotalResponse"
+            }
+          }
+        }
+      },
+      "MesResponse": {
+        "type": "object",
+        "properties": {
+          "mes": {
+            "type": "string",
+            "example": "2026-06"
+          },
+          "receitas": {
+            "type": "string"
+          },
+          "despesas": {
+            "type": "string"
+          },
+          "saldo": {
+            "type": "string"
+          },
+          "porCategoria": {
+            "type": "array",
+            "description": "Preenchido só no comparativo",
+            "items": {
+              "$ref": "#/components/schemas/CategoriaTotalResponse"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "token": {
+        "type": "http",
+        "description": "Token único configurado em FINTRACK_TOKEN (ADR-008)",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
