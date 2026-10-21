@@ -27,3 +27,19 @@ spring:
       # Extrato OFX mensal tem poucos KB. O limite protege o servidor exposto na internet (ADR-007).
       max-file-size: 5MB
       max-request-size: 6MB
+
+# Acesso por token único (ADR-008). Sem valor padrão aqui: em produção, FINTRACK_TOKEN é obrigatório
+# e a aplicação não sobe sem ele (ou com menos de 32 caracteres).
+fintrack:
+  seguranca:
+    token: ${FINTRACK_TOKEN:}
+
+# Só o health check fica exposto (RNF14), e sem detalhes (não revela banco, disco etc. na internet).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

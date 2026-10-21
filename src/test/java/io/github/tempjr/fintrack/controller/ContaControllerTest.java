@@ -5,11 +5,15 @@ import io.github.tempjr.fintrack.model.Conta;
 import io.github.tempjr.fintrack.model.enums.Instituicao;
 import io.github.tempjr.fintrack.model.enums.TipoConta;
 import io.github.tempjr.fintrack.service.ContaService;
+import io.github.tempjr.fintrack.config.TokenDeTesteConfig;
+import io.github.tempjr.fintrack.security.SecurityConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -31,6 +35,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** Camada web isolada: service mockado, sem banco. Confere status HTTP, JSON e formato dos erros. */
 @WebMvcTest(ContaController.class)
+@Import({SecurityConfig.class, TokenDeTesteConfig.class})
+@ActiveProfiles("test")
 @DisplayName("ContaController")
 class ContaControllerTest {
 

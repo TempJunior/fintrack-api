@@ -14,18 +14,19 @@ Legenda: ⬜ não iniciado · 🟨 em andamento · ✅ pronto · ⏸ adiado · �
 ---
 
 ## 1. Etapa atual
-**Etapa 7 — Relatórios** (✅ 2026-10-20, branch `feat/etapa-7-relatorios`, aguardando commit).
-- `/api/v1/relatorios`: `resumo` (RF21), `por-categoria` (RF22), `mensal` (RF23), `comparativo` (RF24), `saldos` (RF25). Filtros por conta, categoria (com subcategorias) e período (RF26).
-- Somas no banco (`SUM`/`GROUP BY`) pelo `RelatorioRepository`; transferência interna fora (RF14); despesas em valor positivo; dinheiro como string.
-- Saldos pelo `LEDGERBAL` mais recente **pela data do saldo** (D-10); consolidado soma os saldos conhecidos (cartão entra negativo).
-- 154 testes passando.
+**Etapa 8 — Segurança** (✅ 2026-10-20, branch `feat/etapa-8-seguranca`, aguardando commit).
+- Token único em `Authorization: Bearer` validado por filtro do Spring Security, comparação em tempo constante (RNF11, ADR-008). Sem token/errado → 401 em `ProblemDetail`.
+- Token de `FINTRACK_TOKEN` (≥ 32 caracteres), validado na subida (RNF09). Em `dev` há um token local padrão; em `test`, um fixo.
+- `/actuator/health` aberto e sem detalhes (RNF14); demais endpoints do actuator não expostos.
+- Perfil `prod`: banco por variáveis de ambiente, sem Swagger nem console H2, atrás de proxy. **Só sobe depois do 1.3** (driver do Postgres).
+- 174 testes passando.
 
-**Backend do MVP com todos os RFs implementados** (RF01–RF09, RF11–RF26). Faltam: segurança (Etapa 8), Postgres/deploy (1.3 e Etapa 9) e o app (Etapa 10).
+**Backend do MVP completo em funcionalidade e segurança.** Faltam: Postgres + docker compose (1.3), deploy (Etapa 9) e o app (Etapa 10).
 
 ## 2. Próximo passo
-**Etapa 8 — Segurança:** filtro do Spring Security com token único (`Authorization: Bearer`, comparação em tempo constante, token ≥ 32 bytes vindo de variável de ambiente), `/actuator/health` liberado (RNF14), Swagger fechado em produção, perfil `prod` (RNF09, RNF11, ADR-008).
-
-Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil apontando para ele e Testcontainers nos testes de integração.
+Duas frentes independentes; a ordem depende de ter Docker:
+- **Com Docker:** 1.3 (Postgres no compose + driver + Testcontainers) e depois **Etapa 9 — Infra/deploy** (Dockerfile, compose com Caddy, EC2, domínio D-07, backup).
+- **Sem Docker:** **Etapa 10 — App Android**, contra o backend local (`http://10.0.2.2:8080` no emulador, token de dev).
 
 ---
 
@@ -38,6 +39,9 @@ Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil a
 | Build | Maven Wrapper 3.3.4 → Maven 3.9.16 | `mvnw` / `mvnw.cmd` |
 | `spring-boot-starter-web` | (BOM) | `ContaController` |
 | `spring-boot-starter-validation` | (BOM) | Bean Validation nos DTOs |
+| `spring-boot-starter-security` | (BOM) | Spring Security 6.5; filtro de token (ADR-008) |
+| `spring-boot-starter-actuator` | (BOM) | Só `health` exposto, sem detalhes |
+| `spring-security-test` | (BOM), test | |
 | `springdoc-openapi-starter-webmvc-ui` | 2.8.17 | Spec `/v3/api-docs`, UI `/swagger-ui.html` (fechar em prod na Etapa 8) |
 | `spring-boot-starter-data-jpa` | (BOM) | Hibernate 6, `ddl-auto: validate`, `open-in-view: false` |
 | `ofx4j` (`com.webcohesion.ofx4j`) | 1.39 | Parser OFX (SGML 1.x e XML 2.x) |
@@ -47,9 +51,9 @@ Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil a
 
 **Removido:** Lombok (2026-10-20, incremento 1.1 — não adotado, ver instruções).
 
-**Ainda não presentes** (previstos no plano): driver PostgreSQL, Spring Security / filtro de token, formatador (Spotless etc.), perfil `prod`, Docker.
+**Ainda não presentes** (previstos no plano): driver PostgreSQL (+ `flyway-database-postgresql`), formatador (Spotless etc. — RNF18), Docker.
 
-**Perfis:** `application.yaml` (comum, `profiles.default: dev`), `application-dev.yaml` (H2 na memória + console), `src/test/resources/application-test.yaml` (H2 na memória; testes com `@ActiveProfiles("test")`).
+**Perfis:** `application.yaml` (comum, `profiles.default: dev`, token de `FINTRACK_TOKEN`, actuator só health), `application-dev.yaml` (H2 na memória + console + token local), `application-prod.yaml` (banco e token do ambiente, sem docs/console), `src/test/resources/application-test.yaml` (H2 na memória, token fixo, estatísticas do Hibernate; testes com `@ActiveProfiles("test")`).
 
 **Outros fatos do repositório**
 - Repositório git criado (remote `TempJunior/fintrack-api`); primeiro commit só com `src/`. `.gitignore` exclui `data/`, `arquivos/`, `*.ofx` (exceto em `src/test/resources`) e `.env` (2026-10-20).
@@ -67,9 +71,10 @@ Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil a
 | `repository` | `ContaRepository`, `TransacaoRepository` (`findDedupKeysExistentes`, `findByContaId`, `findCategorizaveis` em Slice, `findAll(Specification)` com `@EntityGraph`, `findDetalhadaById`) + `TransacaoFiltro` e `TransacaoSpecs`, `ImportacaoRepository` (`findComSaldo`), `RelatorioRepository` (classe com `EntityManager`: totais, por categoria, por mês) + `FiltroRelatorio`, `CategoriaRepository` (`existeNomeNoNivel`), `RegraCategorizacaoRepository` (`findAllComCategoria` com JOIN FETCH) |
 | `controller` | `ContaController`, `ImportController`, `CategoriaController` (`/api/v1/categorias`), `RegraController` (`/api/v1/regras`), `TransacaoController` (`/api/v1/transacoes`), `RelatorioController` (`/api/v1/relatorios`) |
 | `dto` | Requests: `CriarContaRequest`, `AtualizarContaRequest`, `CriarCategoriaRequest`, `RenomearCategoriaRequest`, `CriarRegraRequest`. Responses: `ContaResponse`, `ImportacaoResponse` (dinheiro como string), `CategoriaResponse` (árvore), `RegraResponse`, `TransacaoResponse`, `PaginaResponse<T>`, `RelatorioResponses` (records aninhados dos relatórios). Requests da Etapa 6: `CategorizarTransacaoRequest`, `EnriquecerTransacaoRequest` |
-| `config` | `OpenApiConfig` |
+| `config` | `OpenApiConfig` (com esquema bearer para o botão Authorize do Swagger) |
+| `security` | `SecurityConfig`, `TokenAuthenticationFilter`, `ProblemDetailAuthenticationEntryPoint`, `SegurancaProperties` |
 | `exception` | `RecursoNaoEncontradoException`, `ImportacaoRejeitadaException`, `ArquivoInvalidoException`, `ConflitoException`, `GlobalExceptionHandler` (ProblemDetail: 400, 404, 409, 413, 422, 500) |
-| `src/test` | Unitários sem Spring: `ContaTest`, `TransacaoTest`, `DedupKeyTest`, `RegraCategorizacaoTest`, `ContaServiceImplTest`, `TransacaoServiceImplTest`, `CategorizacaoServiceImplTest`, `RelatorioServiceImplTest`. Parser: `OfxStatementParserTest`, `FormatDetectorTest`, `OfxCharsetTest`. Web: `ContaControllerTest`, `ImportControllerTest` (`@WebMvcTest`). Integração: `TransacaoRepositoryTest`, `TransacaoServiceIntegrationTest` (`@DataJpaTest` + Flyway), `ImportServiceIntegrationTest`, `CategorizacaoApiIntegrationTest`, `TransacaoApiIntegrationTest` e `RelatorioApiIntegrationTest` (`@SpringBootTest`, sem transação de teste, limpam o banco antes e depois; o último conta consultas SQL via estatísticas do Hibernate), `OpenApiContractTest`. `FintrackApplicationTests` |
+| `src/test` | Unitários sem Spring: `ContaTest`, `TransacaoTest`, `DedupKeyTest`, `RegraCategorizacaoTest`, `ContaServiceImplTest`, `TransacaoServiceImplTest`, `CategorizacaoServiceImplTest`, `RelatorioServiceImplTest`. Parser: `OfxStatementParserTest`, `FormatDetectorTest`, `OfxCharsetTest`. Web: `ContaControllerTest`, `ImportControllerTest` (`@WebMvcTest`). Integração: `TransacaoRepositoryTest`, `TransacaoServiceIntegrationTest` (`@DataJpaTest` + Flyway), `ImportServiceIntegrationTest`, `CategorizacaoApiIntegrationTest`, `TransacaoApiIntegrationTest` e `RelatorioApiIntegrationTest` (`@SpringBootTest`, com `TokenDeTesteConfig` pondo o token em toda requisição, sem transação de teste, limpam o banco antes e depois; o último conta consultas SQL via estatísticas do Hibernate), `OpenApiContractTest`. Segurança: `SegurancaIntegrationTest`, `SegurancaPropertiesTest`, `PerfilProdTest` (prod com datasource trocado por H2). `FintrackApplicationTests` |
 | `resources/db/migration` | `V1__schema_inicial.sql` (6 tabelas, constraints e índices do modelo) |
 | `test/resources/ofx` | OFX **sintéticos**: Itaú v1 em Windows-1252 (com `–` para pegar erro de encoding), cartão v2 UTF-8 com FITID UUID e datas sem fuso, corrompido, PDF e CSV. `*.ofx` marcado como `binary` no `.gitattributes` |
 | `arquivos/itau.ofx` | Extrato real Itaú (16 transações, jun–jul/2026) — fora do git |
@@ -82,13 +87,13 @@ Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil a
 | Área | Status | Observações |
 |---|---|---|
 | Esqueleto do projeto (build, formatador, perfis) | 🟨 | Maven + Boot 3.5.16 + Java 21 + git; pacotes por camada; Flyway + `validate`; perfis `dev`/`test`. Falta formatador, perfil `prod` e Postgres |
-| Segurança (filtro de token) | ⬜ | |
+| Segurança (filtro de token) | ✅ | Token Bearer, 401 em ProblemDetail, health aberto, perfil `prod` (ADR-008) |
 | Contas | ✅ | Entidade, service e API completos (RF01–RF03). `numeroExterno` só será preenchido pela importação (Etapa 4) |
 | Importação (detector, parser OFX, ImportService) | ✅ | Conta e cartão, v1 e v2; upload; validação da conta; atomicidade; auditoria; categorização automática |
 | Transações (dedup, enriquecimento) | ✅ | Núcleo + API: listagem paginada com filtros, detalhe, categoria manual, nota, tags, transferência interna |
 | Categorização (categorias, regras) | ✅ | Categorias (2 níveis), regras, aplicação na importação, reaplicação em lote (RF15–RF20) |
 | Relatórios | ✅ | Resumo, por categoria, mensal, comparativo, saldos (RF21–RF26) |
-| OpenAPI / Swagger | ✅ | Cobre toda a API do MVP; teste de contrato confere as rotas e o tipo string do dinheiro. Fechar em prod na Etapa 8 |
+| OpenAPI / Swagger | ✅ | Cobre toda a API do MVP, com esquema de token; desligado no perfil `prod` |
 
 ### Infraestrutura
 | Item | Status | Observações |
@@ -125,6 +130,13 @@ Decisões pequenas que ainda não viraram ADR. Se uma delas crescer, promova par
 - 2026-07 — `Conta.id` = BANKID do OFX (ex.: Itaú 0341) — vincular o arquivo à conta sem seleção manual. **Revisar** (ver §7).
 - 2026-07 — `Transacao.id` = FITID do OFX, usado também para deduplicação. **Revisar** (ver §7).
 - 2026-10-20 — Backend em camadas MVC (controller/service/repository), sem módulos internos e com entidade JPA única — **ADR-009**. Resolve o D-06; `Money` sai do plano.
+- 2026-10-20 — Segurança (Etapa 8):
+  - Filtro fora de `@Component` (senão o Boot o registraria também como filtro de servlet e ele rodaria duas vezes).
+  - Comparação por SHA-256 + `MessageDigest.isEqual` (tempo constante, sem revelar o tamanho do token).
+  - Sem sessão e sem CSRF (sem cookies; cliente nativo). Sem usuário padrão do Boot (`UserDetailsService` vazio).
+  - Token de dev fixo no `application-dev.yaml`: não é segredo, só vale localmente; prod exige `FINTRACK_TOKEN`.
+  - `PathPatternRequestMatcher` (Security 6.5) para as rotas e `PathRequest.toH2Console()` para o console, evitando a ambiguidade de matchers com mais de um servlet.
+  - **Correção de um erro meu na Etapa 6:** a configuração `generate_statistics` nunca tinha sido gravada, então o teste de N+1 contava zero consultas e passava sem medir nada. Corrigido: estatísticas ligadas e o teste exige que elas estejam ativas e que a contagem fique entre 1 e 3. Passa de verdade.
 - 2026-10-20 — Relatórios (Etapa 7):
   - Receita = valor positivo; despesa = valor negativo, exibida como positiva; saldo = receitas − despesas. Transferência interna fora de tudo (RF14).
   - Por categoria: agrupado pela raiz (subcategorias somadas e detalhadas dentro), mais despesa primeiro, "Não categorizado" por último. Mostra despesas **e** receitas por categoria (estorno do cartão cai na mesma categoria da compra).
@@ -194,7 +206,7 @@ Cada etapa termina em algo que roda e tem teste. A ordem segue as dependências 
 | 5 | Categorização | ✅ Categorias/subcategorias, regras, `CategorizacaoService`, aplicação na importação, reaplicar em lote | RF15–RF20 | ✅ |
 | 6 | Transações (API) | ✅ Listagem paginada com filtros, enriquecimento, transferência interna | RF12–RF14, RF18, RNF03 | ✅ |
 | 7 | Relatórios | ✅ Receitas × despesas, por categoria, evolução mensal, comparativo, saldos | RF21–RF26 | ✅ |
-| 8 | Segurança | Filtro de token, health check liberado, Swagger fechado em prod | RNF11, ADR-008 | ⬜ |
+| 8 | Segurança | ✅ Filtro de token, health check liberado, Swagger fechado em prod | RNF11, ADR-008 | ✅ |
 | 9 | Infra / deploy | Dockerfile da API, compose completo com Caddy, EC2 + Elastic IP + security group, domínio (D-07), backup para S3 | RNF07, RNF10, RNF19–RNF21, ADR-007 | ⬜ |
 | 10 | App Android | Esqueleto → settings → accounts → importing → transactions → categorization → reports (D-08) | RF28–RF30, RNF25, RNF26, ADR-006 | ⬜ |
 

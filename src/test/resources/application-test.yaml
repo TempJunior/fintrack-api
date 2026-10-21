@@ -8,7 +8,15 @@ spring:
 
   jpa:
     show-sql: false
+    properties:
+      hibernate:
+        # Permite aos testes contar quantas consultas SQL uma operação fez (ex.: provar que não há N+1).
+        generate_statistics: true
 
   h2:
     console:
       enabled: false
+
+fintrack:
+  seguranca:
+    token: token-de-teste-com-pelo-menos-32-caracteres

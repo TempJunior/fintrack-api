@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Projeto | Fintrack |
-| Versão do documento | 0.4 |
+| Versão do documento | 0.5 |
 | Documento relacionado | fintrack-srs.md (requisitos, v0.2) · fintrack-modelo-dados.md (diagramas) |
 | Status | Backend organizado em camadas MVC (ADR-009) — sujeita a refino durante implementação |
 | Última atualização | 2026-10-20 |
@@ -361,8 +361,17 @@ Internet
 ### 9.3 Regras de segurança da borda
 - Security group: 443 e 80 abertos; 22 apenas para o IP do desenvolvedor; 5432 e 8080 **nunca** publicados.
 - Toda rota exige `Authorization: Bearer <token>`, exceto `/actuator/health`. Swagger UI desabilitado no perfil de produção (ou atrás do token).
-- Token aleatório (≥ 32 bytes) vindo de variável de ambiente; comparação em tempo constante. Trocar o token = trocar a variável e reiniciar o container.
+- Token aleatório (≥ 32 caracteres) vindo da variável de ambiente `FINTRACK_TOKEN`; comparação em tempo constante. Trocar o token = trocar a variável e reiniciar o container.
 - Logs sem dados sensíveis (RNF08) e sem o token.
+
+**Como ficou implementado (Etapa 8, pacote `security`):**
+- `TokenAuthenticationFilter` (cadeia do Spring Security, não é `@Component`): lê `Authorization: Bearer <token>` (esquema sem diferenciar maiúsculas) e compara o SHA-256 do recebido com o do esperado via `MessageDigest.isEqual` — tempo constante e sem revelar o tamanho do token.
+- Sem token ou com token errado: **401** em `ProblemDetail`, com `WWW-Authenticate: Bearer`, mesma mensagem nos dois casos. Token errado gera log `WARN` com método, rota e IP (nunca o cabeçalho).
+- `SegurancaProperties` valida na subida: sem `FINTRACK_TOKEN` ou com menos de 32 caracteres, a aplicação não inicia.
+- Sem sessão (`STATELESS`), sem CSRF (não há cookie; cliente nativo), sem form login nem HTTP Basic, sem usuário padrão gerado pelo Boot.
+- Rotas abertas: `/actuator/health` (sem detalhes — RNF14), `/error` e a documentação, que no perfil `prod` está desligada (404). Console do H2 só no perfil `dev`.
+- Perfil `prod` (`application-prod.yaml`): banco por `FINTRACK_DB_URL`/`USER`/`PASSWORD`, sem Swagger, sem console H2, `forward-headers-strategy: framework` (atrás do Caddy).
+- Gerar um token: `openssl rand -base64 32` (disponível no Git Bash).
 
 ---
 
@@ -469,6 +478,7 @@ Internet
 | 0.2 | 2026-10-20 | Cliente Android nativo (§8, ADR-006). Deploy em EC2 com Caddy/HTTPS (§9, ADR-007). Autenticação por token antecipada para o MVP (ADR-008, pacote `security`). CSV do Mercado Pago removido do MVP: modelo canônico só OFX, mapeamento CSV movido para o Apêndice A. Seções 8–12 renumeradas para 9–13. |
 | 0.3 | 2026-10-20 | Backend em camadas MVC sem módulos internos (ADR-009): §3.1–3.5 e §6 reescritas, rastreabilidade ajustada, D-06 resolvido, `Money` removido do plano. Diagramas movidos para `fintrack-modelo-dados.md`. |
 | 0.4 | 2026-10-20 | Importação implementada (Etapa 4): §7.1 (`ImportContext` sem charset; ajustes de encoding, data e valor sobre a ofx4j), §7.3, §7.4 (validação da conta; checksum não se aplica ao OFX — D-13), §7.5 (auditoria da falha com `TransactionTemplate`). ADR-004 corrigido: a ofx4j não aplica o charset. |
+| 0.5 | 2026-10-20 | §9.3: segurança implementada (Etapa 8) — filtro de token, 401 em ProblemDetail, health sem detalhes, perfil `prod`. |
 
 ---
 

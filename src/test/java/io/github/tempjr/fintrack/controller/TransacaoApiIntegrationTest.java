@@ -12,6 +12,7 @@ import io.github.tempjr.fintrack.service.ImportService;
 import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
+import io.github.tempjr.fintrack.config.TokenDeTesteConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -47,6 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(TokenDeTesteConfig.class)
 @ActiveProfiles("test")
 @DisplayName("Transações (integração pela API)")
 class TransacaoApiIntegrationTest {
@@ -222,7 +225,10 @@ class TransacaoApiIntegrationTest {
 
         // 1 SELECT com JOIN em conta e categoria + 1 COUNT da paginação + 1 SELECT ... IN para as tags.
         // Com N+1 seriam 40+ (uma consulta de categoria e uma de tags por linha).
-        assertThat(estatisticas.getPrepareStatementCount()).isLessThanOrEqualTo(3);
+        assertThat(estatisticas.isStatisticsEnabled())
+                .as("estatísticas do Hibernate desligadas: o teste não estaria medindo nada")
+                .isTrue();
+        assertThat(estatisticas.getPrepareStatementCount()).isBetween(1L, 3L);
     }
 
     @Nested

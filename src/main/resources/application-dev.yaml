@@ -14,3 +14,9 @@ spring:
       # Só em dev. Nunca habilitar em produção.
       enabled: true
       path: /h2-console
+
+# Token só para desenvolvimento local, para não precisar exportar variável a cada execução.
+# Não é segredo e não vale fora da sua máquina: em produção o perfil é outro e o token vem do ambiente.
+fintrack:
+  seguranca:
+    token: ${FINTRACK_TOKEN:dev-token-somente-local-nao-usar-em-producao}

@@ -11,6 +11,7 @@ import io.github.tempjr.fintrack.service.CategorizacaoService;
 import io.github.tempjr.fintrack.service.ContaService;
 import io.github.tempjr.fintrack.service.ImportService;
 import io.github.tempjr.fintrack.service.TransacaoService;
+import io.github.tempjr.fintrack.config.TokenDeTesteConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -47,6 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(TokenDeTesteConfig.class)
 @ActiveProfiles("test")
 @DisplayName("Relatórios (integração pela API)")
 class RelatorioApiIntegrationTest {
