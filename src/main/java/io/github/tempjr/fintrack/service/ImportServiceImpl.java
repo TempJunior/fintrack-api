@@ -10,7 +10,6 @@ import com.webcohesion.ofx4j.domain.data.common.Transaction;
 import com.webcohesion.ofx4j.io.AggregateUnmarshaller;
 import io.github.tempjr.fintrack.model.Conta;
 import io.github.tempjr.fintrack.model.Transacao;
-import io.github.tempjr.fintrack.repository.TransacaoRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -22,9 +21,7 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 @Service
 public class ImportServiceImpl implements ImportService {
@@ -32,12 +29,11 @@ public class ImportServiceImpl implements ImportService {
     private static final Logger log = LoggerFactory.getLogger(ImportServiceImpl.class);
 
     private final ContaService contaService;
-    // Temporário: pela regra das camadas, quem usa TransacaoRepository é o TransacaoService (Etapa 3).
-    private final TransacaoRepository transacaoRepository;
+    private final TransacaoService transacaoService;
 
-    public ImportServiceImpl(ContaService contaService, TransacaoRepository transacaoRepository) {
+    public ImportServiceImpl(ContaService contaService, TransacaoService transacaoService) {
         this.contaService = contaService;
-        this.transacaoRepository = transacaoRepository;
+        this.transacaoService = transacaoService;
     }
 
     @Override
@@ -52,22 +48,12 @@ public class ImportServiceImpl implements ImportService {
         }
 
         List<Transacao> lidas = lerTransacoes(arquivo, conta);
-        List<Transacao> novas = new ArrayList<>();
-        Set<String> chavesNoArquivo = new HashSet<>();
-
-        for (Transacao transacao : lidas) {
-            boolean repetidaNoArquivo = !chavesNoArquivo.add(transacao.getDedupKey());
-            boolean jaGravada = transacaoRepository.existsByContaIdAndDedupKey(contaId, transacao.getDedupKey());
-            if (!repetidaNoArquivo && !jaGravada) {
-                novas.add(transacao);
-            }
-        }
-        transacaoRepository.saveAll(novas);
+        ResultadoDedup resultado = transacaoService.salvarNovas(conta, lidas);
 
         // Só contagens e ids no log (RNF08).
         log.info("Importação conta {}: {} lidas, {} novas, {} duplicadas",
-                contaId, lidas.size(), novas.size(), lidas.size() - novas.size());
-        return novas.size();
+                contaId, resultado.totalLido(), resultado.novas().size(), resultado.duplicadas());
+        return resultado.novas().size();
     }
 
     private List<Transacao> lerTransacoes(File arquivo, Conta conta) {

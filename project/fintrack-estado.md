@@ -14,16 +14,17 @@ Legenda: ⬜ não iniciado · 🟨 em andamento · ✅ pronto · ⏸ adiado · �
 ---
 
 ## 1. Etapa atual
-**Etapa 2 — Contas + padrão de API** (✅ 2026-10-20, branch `feat/etapa-2-contas`, aguardando commit).
-- API de contas em `/api/v1/contas`: criar (201 + Location), listar com filtro `ativa`, buscar, renomear (PATCH), inativar (204).
-- DTOs em `record` com Bean Validation; erros em `ProblemDetail` (RFC 9457) com `campos` nos erros de validação.
-- OpenAPI com springdoc: spec em `/v3/api-docs`, Swagger UI em `/swagger-ui.html`.
-- 43 testes passando (unitários, `@WebMvcTest`, `@DataJpaTest`, contrato OpenAPI).
+**Etapa 3 — Transações (núcleo)** (✅ 2026-10-20, branch `feat/etapa-3-transacoes`, aguardando commit).
+- `TransacaoService.salvarNovas(conta, transacoes)` → `ResultadoDedup` (novas + duplicadas): ignora as já gravadas na conta e as repetidas no próprio arquivo; valida que todas são da conta (RF03).
+- `TransacaoRepository.findDedupKeysExistentes`: uma consulta `IN` para o arquivo inteiro, em vez de uma por transação.
+- `ImportServiceImpl` não acessa mais o `TransacaoRepository` (regra do "dono", arquitetura §3.3).
+- Conferido com o `itau.ofx` real: 1ª importação grava 16, 2ª grava 0 (RNF04).
+- 52 testes passando.
 
-Etapa 1 concluída, exceto o 1.3 (Postgres + Testcontainers), adiado por falta de Docker.
+Etapas 1 e 2 concluídas (Etapa 1 sem o 1.3, adiado por falta de Docker).
 
 ## 2. Próximo passo
-**Etapa 3 — Transações (núcleo):** `TransacaoService` como "dono" do `TransacaoRepository` (salvar novas com dedup e devolver a contagem), tirando o acesso direto que o `ImportServiceImpl` faz hoje (RF07, RF11, RNF04, RNF06, ADR-005).
+**Etapa 4 — Importação:** `FormatDetector`, `StatementParser` + `OfxStatementParser` (Strategy, ADR-002), resolver, upload multipart pelo `ImportController`, validação (checksum + conta declarada, D-09), atomicidade e auditoria em `importacoes` inclusive na falha (RF04–RF09, RNF05, RNF12, ADR-004). Resolve os itens 6, 7, 8 e 11 da §7.
 
 Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil apontando para ele e Testcontainers nos testes de integração.
 
@@ -62,15 +63,15 @@ Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil a
 | `FintrackApplication` | Main do Spring Boot |
 | `model` | Entidades JPA: `Conta`, `Transacao`, `Categoria`, `RegraCategorizacao`, `Importacao`; `DedupKey` (cálculo da chave de dedup) |
 | `model.enums` | `Instituicao` (com código do banco), `TipoConta`, `TipoTransacao`, `OrigemCategoria`, `Operador`, `StatementFormat`, `ResultadoImportacao` |
-| `service` | `ContaService`/`Impl` (criar, listar, buscar, renomear, inativar), `ImportService`/`Impl` (protótipo: lê OFX do disco, dedup por `dedupKey`) |
-| `repository` | `ContaRepository`, `TransacaoRepository` (`existsByContaIdAndDedupKey`, `findByContaId` paginado) |
+| `service` | `ContaService`/`Impl` (criar, listar, buscar, renomear, inativar), `TransacaoService`/`Impl` (`salvarNovas` com dedup) + `ResultadoDedup`, `ImportService`/`Impl` (protótipo: lê OFX do disco e delega ao `TransacaoService`) |
+| `repository` | `ContaRepository` (listagens ordenadas), `TransacaoRepository` (`findDedupKeysExistentes`, `findByContaId` paginado) |
 | `controller` | `ContaController` (`/api/v1/contas`) |
 | `dto` | `request/CriarContaRequest`, `request/AtualizarContaRequest`, `response/ContaResponse` |
 | `config` | `OpenApiConfig` |
 | `exception` | `RecursoNaoEncontradoException`, `GlobalExceptionHandler` (ProblemDetail) |
-| `src/test` | Unitários sem Spring: `ContaTest`, `TransacaoTest`, `DedupKeyTest`, `ContaServiceImplTest`. Web: `ContaControllerTest` (`@WebMvcTest`). Integração: `TransacaoRepositoryTest` (`@DataJpaTest` + Flyway), `OpenApiContractTest`. `FintrackApplicationTests` |
+| `src/test` | Unitários sem Spring: `ContaTest`, `TransacaoTest`, `DedupKeyTest`, `ContaServiceImplTest`, `TransacaoServiceImplTest`. Web: `ContaControllerTest` (`@WebMvcTest`). Integração: `TransacaoRepositoryTest`, `TransacaoServiceIntegrationTest` (`@DataJpaTest` + Flyway), `OpenApiContractTest`. `FintrackApplicationTests` |
 | `resources/db/migration` | `V1__schema_inicial.sql` (6 tabelas, constraints e índices do modelo) |
-| `arquivos/itau.ofx` | Extrato real Itaú (17 transações, jun–jul/2026) — fora do git |
+| `arquivos/itau.ofx` | Extrato real Itaú (16 transações, jun–jul/2026) — fora do git |
 
 ---
 
@@ -83,7 +84,7 @@ Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil a
 | Segurança (filtro de token) | ⬜ | |
 | Contas | ✅ | Entidade, service e API completos (RF01–RF03). `numeroExterno` só será preenchido pela importação (Etapa 4) |
 | Importação (detector, parser OFX, ImportService) | 🟨 | Parser OFX via ofx4j, só extrato bancário (`BANKMSGSRSV1`). Sem detector de formato, sem cartão (`CREDITCARDMSGSRSV1`), sem upload (recebe `File`) |
-| Transações (dedup, enriquecimento) | 🟨 | Entidade com bruto imutável, `dedupKey` (FITID ou hash) e enriquecimento (categoria com origem, nota, tags, transferência). Sem `TransacaoService` nem API |
+| Transações (dedup, enriquecimento) | 🟨 | Núcleo ✅: entidade com bruto imutável, `dedupKey`, `TransacaoService.salvarNovas` idempotente. Falta API de listagem/enriquecimento (Etapa 6) |
 | Categorização (categorias, regras) | ⬜ | Entidades `Categoria` (com pai) e `RegraCategorizacao`; sem lógica de regra |
 | Relatórios | ⬜ | |
 | OpenAPI / Swagger | 🟨 | springdoc configurado; cobre contas. Cresce a cada endpoint novo |
@@ -112,7 +113,7 @@ Pendente da Etapa 1 (quando houver Docker): Postgres no docker compose, perfil a
 ## 5. Bancos testados com arquivos reais
 | Banco | Tipo de conta | Versão OFX | Resultado |
 |---|---|---|---|
-| Itaú | Corrente (`CHECKING`, BANKID 0341) | 1.02 (SGML, CHARSET 1252) | 🟨 Usado no `ImportServiceImplTest`; teste sem asserts e depende de conta já existente no H2 |
+| Itaú | Corrente (`CHECKING`, BANKID 0341) | 1.02 (SGML, CHARSET 1252) | 🟨 Importação conferida em 2026-10-20 (16 novas; reimportação 0). Falta teste automatizado com arquivo anonimizado em `src/test/resources` (Etapa 4) |
 | Nubank | | | Não testado. Atenção: FITID do Nubank não é numérico (ver §7, item 1) |
 
 ## 6. Decisões tomadas durante a implementação
@@ -123,6 +124,7 @@ Decisões pequenas que ainda não viraram ADR. Se uma delas crescer, promova par
 - 2026-07 — `Conta.id` = BANKID do OFX (ex.: Itaú 0341) — vincular o arquivo à conta sem seleção manual. **Revisar** (ver §7).
 - 2026-07 — `Transacao.id` = FITID do OFX, usado também para deduplicação. **Revisar** (ver §7).
 - 2026-10-20 — Backend em camadas MVC (controller/service/repository), sem módulos internos e com entidade JPA única — **ADR-009**. Resolve o D-06; `Money` sai do plano.
+- 2026-10-20 — Dedup (Etapa 3): repetição dentro do mesmo arquivo conta como duplicada (com FITID isso não acontece nos bancos reais; com o hash do ADR-005, duas transações idênticas no mesmo dia viram uma — risco já aceito no ADR). Se duas importações simultâneas passarem pela checagem, a constraint `UNIQUE` barra e a importação inteira falha (tratamento na Etapa 4).
 - 2026-10-20 — API de contas (Etapa 2): rotas em `/api/v1`; só o apelido é editável (instituição e tipo fixos, para não bagunçar transações já importadas); lista de contas sem paginação (são poucas; RNF03 é sobre transações); `numeroExterno` fora da resposta (sensível); sem "reativar" (nenhum RF pede). Regras de entidade (`IllegalArgumentException`) viram 400; erro inesperado vira 500 genérico com detalhe só no log.
 - 2026-10-20 — **Postgres adiado** (sem Docker na máquina): `dev` e `test` em H2 na memória, modo PostgreSQL. As migrations usam só SQL que roda nos dois. Os dados de `dev` somem ao parar a aplicação. Risco aceito: diferenças H2 × Postgres só aparecem no 1.3, que precisa acontecer antes do deploy (Etapa 9).
 - 2026-10-20 — Lombok removido do `pom.xml`; entidades com construtor e getters explícitos, sem setters em campo bruto (RNF06).
@@ -156,7 +158,7 @@ Cada etapa termina em algo que roda e tem teste. A ordem segue as dependências 
 | 0 | Repositório | git, `.gitignore` seguro, documentos no repo | RNF08, RNF23 | ✅ |
 | 1 | Fundação | 1.1 ✅ pacotes por camada + entidades + testes · 1.2 ✅ Flyway `V1` + perfis + `validate` + integração em H2 · 1.3 ⏸ Postgres (compose) + Testcontainers — adiado até haver Docker; obrigatório antes da Etapa 9 | ADR-003, ADR-009, RNF19, RNF21 | 🟨 |
 | 2 | Contas + padrão de API | `ContaController`/`ContaService` (criar, listar, editar, inativar); DTOs; `ProblemDetail`; springdoc-openapi | RF01–RF03, RNF22 | ✅ |
-| 3 | Transações (núcleo) | `Transacao` imutável no bruto; cálculo da `dedupKey`; `TransacaoService` com dedup e constraint única | RF07, RF11, RNF04, RNF06, ADR-005 | ⬜ |
+| 3 | Transações (núcleo) | `Transacao` imutável no bruto; cálculo da `dedupKey`; `TransacaoService` com dedup e constraint única | RF07, RF11, RNF04, RNF06, ADR-005 | ✅ |
 | 4 | Importação | `FormatDetector`, `OfxStatementParser` (Strategy), resolver, upload multipart, validação (checksum + conta), atomicidade, auditoria (inclusive falha) | RF04–RF09, RNF05, RNF12, ADR-002, ADR-004 | ⬜ |
 | 5 | Categorização | Categorias/subcategorias, regras, `CategorizacaoService`, aplicação na importação, reaplicar em lote | RF15–RF20 | ⬜ |
 | 6 | Transações (API) | Listagem paginada com filtros, enriquecimento, transferência interna | RF12–RF14, RF18, RNF03 | ⬜ |

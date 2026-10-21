@@ -21,6 +21,8 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -74,12 +76,17 @@ class TransacaoRepositoryTest {
     }
 
     @Test
-    @DisplayName("existsByContaIdAndDedupKey encontra transação já gravada")
-    void existsPorDedupKey() {
-        transacaoRepository.saveAndFlush(transacao("FIT-1", "-10.00"));
+    @DisplayName("findDedupKeysExistentes devolve só as chaves já gravadas nesta conta")
+    void chavesExistentes() {
+        Conta outra = contaRepository.save(new Conta(Instituicao.NUBANK, TipoConta.CORRENTE, "Nubank"));
+        transacaoRepository.save(transacao("FIT-1", "-10.00"));
+        transacaoRepository.saveAndFlush(new Transacao(outra, "FIT-2", LocalDate.of(2026, 6, 10),
+                new BigDecimal("-10.00"), "PIX"));
 
-        assertThat(transacaoRepository.existsByContaIdAndDedupKey(conta.getId(), "FIT-1")).isTrue();
-        assertThat(transacaoRepository.existsByContaIdAndDedupKey(conta.getId(), "FIT-2")).isFalse();
+        Set<String> existentes = transacaoRepository.findDedupKeysExistentes(conta.getId(),
+                List.of("FIT-1", "FIT-2", "FIT-3"));
+
+        assertThat(existentes).containsExactly("FIT-1"); // FIT-2 é de outra conta; FIT-3 não existe
     }
 
     @Test
